@@ -22,6 +22,21 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
+class SpecificationTemplate(models.Model):
+    category = models.ForeignKey(
+        Category,
+        on_delete= models.CASCADE,
+        related_name= "specifications_templates"
+    )
+    name =models.CharField(max_length=100)
+    is_required = models.BooleanField(default=False)
+    sort_order = models.PositiveBigIntegerField(default=0)
+    class Meta:
+        ordering = ["sort_order","name"]
+        unique_together = ("category","name")
+
+    def __str__(self):
+        return f"{self.category.name} - {self.name}"
 
 class Brand(models.Model):
     name = models.CharField(max_length=100, unique=True)

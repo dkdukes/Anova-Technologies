@@ -1,12 +1,36 @@
 from django.contrib import admin
-from . models import (
+
+from .models import (
     Brand,
     Category,
     Product,
     ProductImage,
-    ProductSpecification
+    ProductSpecification,
+    SpecificationTemplate,
 )
-# Register your models here.
+
+
+@admin.register(SpecificationTemplate)
+class SpecificationTemplateAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "category",
+        "is_required",
+        "sort_order",
+    )
+    list_filter = (
+        "category",
+        "is_required",
+    )
+    search_fields = (
+        "name",
+        "category_name",
+    )
+    ordering = (
+        "category",
+        "sort_order",
+    )
+
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = (
@@ -14,11 +38,13 @@ class CategoryAdmin(admin.ModelAdmin):
         "is_active",
         "created_at",
     )
+
     search_fields = (
-        "name"
+        "name",
     )
+
     prepopulated_fields = {
-        "slug":("name",)
+        "slug": ("name",),
     }
 
 
@@ -26,14 +52,17 @@ class CategoryAdmin(admin.ModelAdmin):
 class BrandAdmin(admin.ModelAdmin):
     list_display = (
         "name",
-        "is_active"
+        "is_active",
     )
+
     search_fields = (
-        "name"
+        "name",
     )
+
     prepopulated_fields = {
-        "slug":("name",)
+        "slug": ("name",),
     }
+
 
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
@@ -47,6 +76,7 @@ class ProductSpecificationInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+
     list_display = (
         "name",
         "brand",
@@ -58,101 +88,114 @@ class ProductAdmin(admin.ModelAdmin):
         "status",
         "is_featured",
     )
+
     list_filter = (
         "category",
         "brand",
         "condition",
         "status",
-        "is_featured"
+        "is_featured",
     )
+
     search_fields = (
         "name",
         "sku",
-        "brand_name",
-        "category_name",
+        "brand__name",
+        "category__name",
     )
+
     prepopulated_fields = {
-        "slug":("name",)
+        "slug": ("name",),
     }
+
     readonly_fields = (
         "created_at",
         "updated_at",
     )
+
     inlines = [
         ProductImageInline,
-        ProductSpecificationInline
+        ProductSpecificationInline,
     ]
+
     fieldsets = (
+
         (
             "Basic Information",
             {
-                "fields" : (
+                "fields": (
                     "name",
                     "slug",
                     "sku",
                     "category",
                     "brand",
                     "condition",
-                    "status"
-                )
+                    "status",
+                ),
             },
         ),
+
         (
             "Description",
             {
-                "fields":(
+                "fields": (
                     "short_description",
-                    "description"
-                )
+                    "description",
+                ),
             },
         ),
+
         (
             "Pricing & Inventory",
             {
-                "fields":(
+                "fields": (
                     "price",
                     "sale_price",
                     "stock_quantity",
                     "low_stock_threshold",
-                    "warranty"
-                )
+                    "warranty",
+                ),
             },
         ),
+
         (
             "Delivery Information",
             {
-                "fields":(
+                "fields": (
                     "weight",
                     "package_length",
                     "package_width",
-                    "package_height"
-                )
+                    "package_height",
+                ),
             },
         ),
+
         (
             "SEO",
             {
-                "fields",(
+                "fields": (
                     "meta_title",
-                    "meta_description"
-                )
+                    "meta_description",
+                ),
             },
         ),
+
         (
             "Store Settings",
             {
-                "fields":(
-                    "is_featured"
-                )
+                "fields": (
+                    "is_featured",
+                ),
             },
         ),
+
         (
             "System Information",
             {
-                "fields":(
+                "fields": (
                     "created_at",
-                    "updated_at"
-                )
+                    "updated_at",
+                ),
             },
         ),
     )
