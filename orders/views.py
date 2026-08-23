@@ -9,7 +9,38 @@ from products.models import Product
 
 from .models import Order, OrderItem
 from .serializers import OrderSerializer
+from decimal import Decimal
 
+
+def get_delivery_fee(county):
+    """
+    Return the delivery fee based on the
+    customer's county.
+    """
+
+    delivery_fees = {
+        "Nairobi": Decimal("300.00"),
+        "Kiambu": Decimal("400.00"),
+        "Machakos": Decimal("450.00"),
+        "Kajiado": Decimal("450.00"),
+        "Nakuru": Decimal("500.00"),
+        "Murang'a": Decimal("450.00"),
+        "Nyeri": Decimal("500.00"),
+        "Kirinyaga": Decimal("500.00"),
+        "Mombasa": Decimal("700.00"),
+        "Kilifi": Decimal("750.00"),
+        "Kwale": Decimal("750.00"),
+        "Kisumu": Decimal("600.00"),
+        "Siaya": Decimal("600.00"),
+        "Kakamega": Decimal("600.00"),
+        "Bungoma": Decimal("600.00"),
+        "Uasin Gishu": Decimal("600.00"),
+    }
+
+    return delivery_fees.get(
+        county,
+        Decimal("500.00"),
+    )
 
 class CreateOrderView(APIView):
 
@@ -192,7 +223,7 @@ class CreateOrderView(APIView):
 
         # Temporary flat delivery fee.
         # We'll make this location-based later.
-        delivery_fee = Decimal("300.00")
+        delivery_fee = get_delivery_fee(county)
 
         total = subtotal + delivery_fee
 
