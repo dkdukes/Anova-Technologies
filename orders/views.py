@@ -13,32 +13,61 @@ from decimal import Decimal
 
 
 def get_delivery_fee(county):
-    """
-    Return the delivery fee based on the
-    customer's county.
-    """
-
     delivery_fees = {
-        "Nairobi": Decimal("300.00"),
-        "Kiambu": Decimal("400.00"),
-        "Machakos": Decimal("450.00"),
-        "Kajiado": Decimal("450.00"),
-        "Nakuru": Decimal("500.00"),
-        "Murang'a": Decimal("450.00"),
-        "Nyeri": Decimal("500.00"),
-        "Kirinyaga": Decimal("500.00"),
-        "Mombasa": Decimal("700.00"),
-        "Kilifi": Decimal("750.00"),
-        "Kwale": Decimal("750.00"),
-        "Kisumu": Decimal("600.00"),
-        "Siaya": Decimal("600.00"),
-        "Kakamega": Decimal("600.00"),
-        "Bungoma": Decimal("600.00"),
-        "Uasin Gishu": Decimal("600.00"),
+        "baringo": Decimal("550.00"),
+        "bomet": Decimal("550.00"),
+        "bungoma": Decimal("600.00"),
+        "busia": Decimal("600.00"),
+        "elgeyo-marakwet": Decimal("600.00"),
+        "embu": Decimal("500.00"),
+        "garissa": Decimal("650.00"),
+        "homa bay": Decimal("650.00"),
+        "isiolo": Decimal("600.00"),
+        "kajiado": Decimal("450.00"),
+        "kakamega": Decimal("600.00"),
+        "kericho": Decimal("550.00"),
+        "kiambu": Decimal("400.00"),
+        "kilifi": Decimal("750.00"),
+        "kirinyaga": Decimal("500.00"),
+        "kisii": Decimal("600.00"),
+        "kisumu": Decimal("600.00"),
+        "kitui": Decimal("550.00"),
+        "kwale": Decimal("750.00"),
+        "laikipia": Decimal("550.00"),
+        "lamu": Decimal("800.00"),
+        "machakos": Decimal("450.00"),
+        "makueni": Decimal("500.00"),
+        "mandera": Decimal("900.00"),
+        "marsabit": Decimal("800.00"),
+        "meru": Decimal("550.00"),
+        "migori": Decimal("650.00"),
+        "mombasa": Decimal("700.00"),
+        "murang'a": Decimal("450.00"),
+        "nairobi": Decimal("300.00"),
+        "nakuru": Decimal("500.00"),
+        "nandi": Decimal("550.00"),
+        "narok": Decimal("600.00"),
+        "nyamira": Decimal("600.00"),
+        "nyandarua": Decimal("500.00"),
+        "nyeri": Decimal("500.00"),
+        "samburu": Decimal("700.00"),
+        "siaya": Decimal("600.00"),
+        "taita-taveta": Decimal("750.00"),
+        "tana river": Decimal("750.00"),
+        "tharaka-nithi": Decimal("550.00"),
+        "trans nzoia": Decimal("600.00"),
+        "turkana": Decimal("850.00"),
+        "uasin gishu": Decimal("600.00"),
+        "vihiga": Decimal("600.00"),
+        "wajir": Decimal("850.00"),
+        "west pokot": Decimal("650.00"),
     }
 
+    # Normalize the value coming from the request
+    normalized_county = county.strip().lower()
+
     return delivery_fees.get(
-        county,
+        normalized_county,
         Decimal("500.00"),
     )
 
@@ -278,4 +307,31 @@ class CreateOrderView(APIView):
         return Response(
             serializer.data,
             status=status.HTTP_201_CREATED,
+        )
+
+
+class DeliveryFeeView(APIView):
+
+    def get(self, request):
+        county = request.query_params.get(
+            "county",
+            ""
+        ).strip()
+
+        if not county:
+            return Response(
+                {
+                    "error": "County is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        delivery_fee = get_delivery_fee(county)
+
+        return Response(
+            {
+                "county": county,
+                "delivery_fee": str(delivery_fee),
+            },
+            status=status.HTTP_200_OK,
         )
