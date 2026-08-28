@@ -3,13 +3,6 @@ from django.db import models
 
 class Payment(models.Model):
 
-    STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("paid", "Paid"),
-        ("failed", "Failed"),
-        ("cancelled", "Cancelled"),
-    ]
-
     PAYMENT_METHOD_CHOICES = [
         ("mpesa", "M-Pesa"),
         ("card", "Card"),
@@ -37,12 +30,6 @@ class Payment(models.Model):
         max_length=20,
         choices=PAYMENT_METHOD_CHOICES,
         default="mpesa",
-    )
-
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="pending",
     )
 
     merchant_request_id = models.CharField(
@@ -90,7 +77,6 @@ class Payment(models.Model):
 
     def __str__(self):
         return (
-            f"{self.order} - "
-            f"{self.payment_method} - "
-            f"{self.status}"
+            f"{self.order.order_number} - "
+            f"{self.payment_method}"
         )
