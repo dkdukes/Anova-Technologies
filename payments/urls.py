@@ -18,4 +18,9 @@ urlpatterns = [
         MpesaStkTestView.as_view(),
         name="mpesa-stk-test",
     ),
+      path(
+        "mpesa/callback/",
+        MpesaCallbackView.as_view(),
+        name="mpesa-callback",
+    ),
 ]
