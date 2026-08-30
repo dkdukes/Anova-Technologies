@@ -3,7 +3,8 @@ from django.urls import path
 from .views import (
     MpesaTestView,
     MpesaStkTestView,
-    MpesaCallbackView
+    MpesaCallbackView,
+    MpesaPaymentStatusView
 )
 
 
@@ -24,4 +25,10 @@ urlpatterns = [
         MpesaCallbackView.as_view(),
         name="mpesa-callback",
     ),
+
+    path(
+    "mpesa/status/<str:checkout_request_id>/",
+    MpesaPaymentStatusView.as_view(),
+    name="mpesa-payment-status",
+),
 ]
