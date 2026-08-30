@@ -10,6 +10,8 @@ from products.models import Product
 from .models import Order, OrderItem
 from .serializers import OrderSerializer
 from decimal import Decimal
+from payments.models import Payment
+from payments.mpesa import MpesaService
 
 
 def get_delivery_fee(county):
@@ -88,9 +90,20 @@ class CreateOrderView(APIView):
         # Validate customer information
         # -----------------------------------------
 
-        full_name = customer.get("full_name", "").strip()
-        email = customer.get("email", "").strip()
-        phone = customer.get("phone", "").strip()
+        full_name = customer.get(
+            "full_name",
+            ""
+        ).strip()
+
+        email = customer.get(
+            "email",
+            ""
+        ).strip()
+
+        phone = customer.get(
+            "phone",
+            ""
+        ).strip()
 
         if not full_name:
             return Response(
@@ -114,9 +127,20 @@ class CreateOrderView(APIView):
         # Validate delivery information
         # -----------------------------------------
 
-        county = delivery.get("county", "").strip()
-        town = delivery.get("town", "").strip()
-        address = delivery.get("address", "").strip()
+        county = delivery.get(
+            "county",
+            ""
+        ).strip()
+
+        town = delivery.get(
+            "town",
+            ""
+        ).strip()
+
+        address = delivery.get(
+            "address",
+            ""
+        ).strip()
 
         if not county:
             return Response(
@@ -157,42 +181,62 @@ class CreateOrderView(APIView):
             )
 
         # -----------------------------------------
-        # Create temporary order data
+        # Prepare order items
         # -----------------------------------------
 
         order_items = []
+
         subtotal = Decimal("0.00")
 
         for item in items:
 
-            product_id = item.get("product_id")
-            quantity = item.get("quantity")
+            product_id = item.get(
+                "product_id"
+            )
+
+            quantity = item.get(
+                "quantity"
+            )
 
             if not product_id:
                 return Response(
-                    {"error": "Product ID is required."},
+                    {
+                        "error":
+                        "Product ID is required."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             try:
                 quantity = int(quantity)
-            except (TypeError, ValueError):
+
+            except (
+                TypeError,
+                ValueError,
+            ):
                 return Response(
-                    {"error": "Invalid quantity."},
+                    {
+                        "error":
+                        "Invalid quantity."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             if quantity <= 0:
                 return Response(
-                    {"error": "Quantity must be greater than zero."},
+                    {
+                        "error":
+                        "Quantity must be greater than zero."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # -------------------------------------
-            # Lock product row while checking stock
+            # Lock product
             # -------------------------------------
 
             try:
+
                 product = (
                     Product.objects
                     .select_for_update()
@@ -201,7 +245,9 @@ class CreateOrderView(APIView):
                         status="active",
                     )
                 )
+
             except Product.DoesNotExist:
+
                 return Response(
                     {
                         "error": (
@@ -217,23 +263,29 @@ class CreateOrderView(APIView):
             # -------------------------------------
 
             if product.stock_quantity < quantity:
+
                 return Response(
                     {
                         "error": (
-                            f"Only {product.stock_quantity} "
-                            f"units of {product.name} are available."
+                            f"Only "
+                            f"{product.stock_quantity} "
+                            f"units of "
+                            f"{product.name} "
+                            "are available."
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # -------------------------------------
-            # Get price from database
+            # Get database price
             # -------------------------------------
 
             unit_price = product.current_price
 
-            item_total = unit_price * quantity
+            item_total = (
+                unit_price * quantity
+            )
 
             subtotal += item_total
 
@@ -247,36 +299,52 @@ class CreateOrderView(APIView):
             )
 
         # -----------------------------------------
-        # Delivery fee
+        # Calculate delivery
         # -----------------------------------------
 
-        # Temporary flat delivery fee.
-        # We'll make this location-based later.
-        delivery_fee = get_delivery_fee(county)
+        delivery_fee = get_delivery_fee(
+            county
+        )
 
-        total = subtotal + delivery_fee
+        total = (
+            subtotal +
+            delivery_fee
+        )
 
         # -----------------------------------------
         # Create order
         # -----------------------------------------
 
         order = Order.objects.create(
+
             user=(
                 request.user
                 if request.user.is_authenticated
                 else None
             ),
+
             full_name=full_name,
+
             email=email,
+
             phone=phone,
+
             county=county,
+
             town=town,
+
             delivery_address=address,
+
             payment_method=payment_method,
+
             payment_status="pending",
+
             status="pending",
+
             subtotal=subtotal,
+
             delivery_fee=delivery_fee,
+
             total=total,
         )
 
@@ -289,26 +357,196 @@ class CreateOrderView(APIView):
             product = item["product"]
 
             OrderItem.objects.create(
+
                 order=order,
+
                 product=product,
+
                 product_name=product.name,
+
                 sku=product.sku,
+
                 quantity=item["quantity"],
+
                 unit_price=item["unit_price"],
+
                 total_price=item["total_price"],
             )
 
         # -----------------------------------------
-        # Return created order
+        # CASH ON DELIVERY
         # -----------------------------------------
 
-        serializer = OrderSerializer(order)
+        if payment_method == "cod":
 
-        return Response(
-            serializer.data,
-            status=status.HTTP_201_CREATED,
+            order.payment_status = "pending"
+
+            order.save(
+                update_fields=[
+                    "payment_status",
+                    "updated_at",
+                ]
+            )
+
+            serializer = OrderSerializer(
+                order
+            )
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        # -----------------------------------------
+        # CARD
+        # -----------------------------------------
+
+        if payment_method == "card":
+
+            return Response(
+                {
+                    "error": (
+                        "Card payments are "
+                        "not available yet."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # -----------------------------------------
+        # M-PESA PAYMENT
+        # -----------------------------------------
+
+        normalized_phone = phone
+
+        # -----------------------------------------
+        # Create payment record
+        # -----------------------------------------
+
+        payment = Payment.objects.create(
+
+            order=order,
+
+            phone_number=normalized_phone,
+
+            amount=total,
+
+            payment_method="mpesa",
+
         )
 
+        # -----------------------------------------
+        # Send STK Push
+        # -----------------------------------------
+
+        try:
+
+            mpesa_response = (
+                MpesaService.stk_push(
+
+                    phone_number=normalized_phone,
+
+                    amount=total,
+
+                    account_reference=(
+                        order.order_number
+                    ),
+
+                    transaction_description=(
+                        "Anova Technologies "
+                        "Order Payment"
+                    ),
+                )
+            )
+
+        except Exception as error:
+
+            # -------------------------------------
+            # STK Push failed
+            # -------------------------------------
+
+            payment.result_description = (
+                str(error)
+            )
+
+            payment.save(
+                update_fields=[
+                    "result_description",
+                    "updated_at",
+                ]
+            )
+
+            return Response(
+                {
+                    "error": (
+                        "Unable to initiate "
+                        "M-Pesa payment."
+                    ),
+
+                    "details": str(error),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # -----------------------------------------
+        # Save Daraja transaction IDs
+        # -----------------------------------------
+
+        payment.merchant_request_id = (
+            mpesa_response.get(
+                "MerchantRequestID"
+            )
+        )
+
+        payment.checkout_request_id = (
+            mpesa_response.get(
+                "CheckoutRequestID"
+            )
+        )
+
+        payment.result_code = (
+            mpesa_response.get(
+                "ResponseCode"
+            )
+        )
+
+        payment.result_description = (
+            mpesa_response.get(
+                "ResponseDescription"
+            )
+        )
+
+        payment.save()
+
+        # -----------------------------------------
+        # Return order + payment information
+        # -----------------------------------------
+
+        serializer = OrderSerializer(
+            order
+        )
+
+        return Response(
+            {
+                "order": serializer.data,
+
+                "payment": {
+                    "status": "pending",
+
+                    "checkout_request_id":
+                        payment.checkout_request_id,
+
+                    "merchant_request_id":
+                        payment.merchant_request_id,
+
+                    "message": (
+                        "M-Pesa payment prompt "
+                        "sent to your phone."
+                    ),
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 class DeliveryFeeView(APIView):
 
