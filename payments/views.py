@@ -151,6 +151,17 @@ class MpesaCallbackView(APIView):
                 },
                 status=404,
             )
+        
+        if payment.order.payment_status == "paid":
+            return Response(
+                {
+                    "ResultCode": 0,
+                    "ResultDesc": (
+                        "Payment already processed."
+                    ),
+                },
+                status=200,
+            )
 
         # -----------------------------------------
         # Save callback information
