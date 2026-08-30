@@ -137,6 +137,18 @@ class MpesaService:
             timeout=30,
         )
 
-        response.raise_for_status()
+        if not response.ok:
+            try:
+                error_data = response.json()
+            except ValueError:
+                error_data = {
+                    "raw_response": response.text
+                }
+
+            raise Exception(
+                f"Daraja STK Push error "
+                f"(HTTP {response.status_code}): "
+                f"{error_data}"
+            )
 
         return response.json()
