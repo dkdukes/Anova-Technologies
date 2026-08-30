@@ -12,6 +12,7 @@ from .serializers import OrderSerializer
 from decimal import Decimal
 from payments.models import Payment
 from payments.mpesa import MpesaService
+from payments.utils import normalize_kenyan_phone
 
 
 def get_delivery_fee(county):
@@ -120,6 +121,21 @@ class CreateOrderView(APIView):
         if not phone:
             return Response(
                 {"error": "Phone number is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        normalized_phone = normalize_kenyan_phone(
+            phone
+        )
+
+        if not normalized_phone:
+            return Response(
+                {
+                    "error": (
+                        "Please enter a valid "
+                        "Kenyan phone number."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -327,7 +343,7 @@ class CreateOrderView(APIView):
 
             email=email,
 
-            phone=phone,
+            phone=normalized_phone,
 
             county=county,
 
@@ -417,7 +433,6 @@ class CreateOrderView(APIView):
         # M-PESA PAYMENT
         # -----------------------------------------
 
-        normalized_phone = phone
 
         # -----------------------------------------
         # Create payment record
