@@ -308,3 +308,58 @@ class MpesaCallbackView(APIView):
             },
             status=200,
         )
+
+
+
+
+class MpesaPaymentStatusView(APIView):
+
+    def get(self, request, checkout_request_id):
+
+        try:
+            payment = (
+                Payment.objects
+                .select_related("order")
+                .get(
+                    checkout_request_id=checkout_request_id
+                )
+            )
+
+        except Payment.DoesNotExist:
+            return Response(
+                {
+                    "error": "Payment not found."
+                },
+                status=404,
+            )
+
+        order = payment.order
+
+        return Response(
+            {
+                "checkout_request_id":
+                    payment.checkout_request_id,
+
+                "order_number":
+                    order.order_number,
+
+                "payment_status":
+                    order.payment_status,
+
+                "order_status":
+                    order.status,
+
+                "amount":
+                    str(payment.amount),
+
+                "mpesa_receipt_number":
+                    payment.mpesa_receipt_number,
+
+                "result_code":
+                    payment.result_code,
+
+                "result_description":
+                    payment.result_description,
+            },
+            status=200,
+        )
