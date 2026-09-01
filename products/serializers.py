@@ -57,21 +57,49 @@ class ProductSpecificationSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    category = CategorySerializer(read_only = True)
-    brand = BrandSerializer(read_only = True)
 
-    images = ProductImageSerializer(many = True, read_only = True)
+    category = CategorySerializer(read_only=True)
+    brand = BrandSerializer(read_only=True)
 
-    specifications = ProductSpecificationSerializer(many = True,read_only = True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.filter(is_active=True),
+        source="category",
+        write_only=True,
+    )
 
-    current_price = serializers.DecimalField(max_digits=12, decimal_places=2, read_only = True)
+    brand_id = serializers.PrimaryKeyRelatedField(
+        queryset=Brand.objects.filter(is_active=True),
+        source="brand",
+        write_only=True,
+    )
 
-    is_on_sale = serializers.BooleanField(read_only = True)
+    images = ProductImageSerializer(
+        many=True,
+        read_only=True,
+    )
 
-    is_low_stock = serializers.BooleanField(read_only = True)
+    specifications = ProductSpecificationSerializer(
+        many=True,
+        read_only=True,
+    )
 
-    class Meta: 
+    current_price = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    is_on_sale = serializers.BooleanField(
+        read_only=True,
+    )
+
+    is_low_stock = serializers.BooleanField(
+        read_only=True,
+    )
+
+    class Meta:
         model = Product
+
         fields = [
             "id",
             "name",
@@ -79,7 +107,10 @@ class ProductSerializer(serializers.ModelSerializer):
             "sku",
 
             "category",
+            "category_id",
+
             "brand",
+            "brand_id",
 
             "short_description",
             "description",
@@ -114,3 +145,22 @@ class ProductSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate(self, attrs):
+
+        price = attrs.get("price")
+        sale_price = attrs.get("sale_price")
+
+        if (
+            sale_price is not None
+            and price is not None
+            and sale_price > price
+        ):
+            raise serializers.ValidationError(
+                {
+                    "sale_price":
+                    "Sale price cannot be greater than the regular price."
+                }
+            )
+
+        return attrs
