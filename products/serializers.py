@@ -466,3 +466,26 @@ class AdminCategorySerializer(serializers.ModelSerializer):
 
     def get_product_count(self, obj):
         return obj.products.count()
+
+
+class StoreSettingsSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = StoreSettings
+        fields = [
+            "id",
+            "store_name",
+            "store_email",
+            "phone",
+            "address",
+            "city",
+            "country",
+            "logo",
+            "description",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "updated_at",
+        ]
