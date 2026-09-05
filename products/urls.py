@@ -25,7 +25,8 @@ from .views import (
     AdminProductImageDetailAPIView,
     AdminProductImageUploadAPIView,
     AdminProductImageReplaceAPIView,
-    AdminStoreSettingsAPIView
+    AdminStoreSettingsAPIView,
+    RelatedProductsAPIView
 )
 
 
@@ -190,5 +191,12 @@ urlpatterns = [
     "admin/settings/",
     AdminStoreSettingsAPIView.as_view(),
     name="admin-store-settings",
-),
+    ),
+
+    path(
+    "products/<slug:slug>/related/",
+    RelatedProductsAPIView.as_view(),
+    name="related-products",
+    ),
+
 ]
