@@ -24,7 +24,8 @@ from .views import (
     AdminProductImageListCreateAPIView,
     AdminProductImageDetailAPIView,
     AdminProductImageUploadAPIView,
-    AdminProductImageReplaceAPIView
+    AdminProductImageReplaceAPIView,
+    AdminStoreSettingsAPIView
 )
 
 
@@ -183,4 +184,11 @@ urlpatterns = [
         AdminDashboardStatsAPIView.as_view(),
         name="admin-dashboard-stats",
     ),
+
+
+    path(
+    "admin/settings/",
+    AdminStoreSettingsAPIView.as_view(),
+    name="admin-store-settings",
+),
 ]
