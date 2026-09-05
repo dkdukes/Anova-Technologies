@@ -4,11 +4,12 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import generics, filters
 
 from products.models import Product
 
 from .models import Order, OrderItem
-from .serializers import OrderSerializer
+from .serializers import OrderSerializer, AdminOrderSerializer
 from decimal import Decimal
 from payments.models import Payment
 from payments.mpesa import MpesaService
@@ -563,6 +564,55 @@ class CreateOrderView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+
+class AdminOrderListAPIView(generics.ListAPIView):
+    queryset = (
+        Order.objects
+        .all()
+        .prefetch_related("items")
+    )
+
+    serializer_class = AdminOrderSerializer
+
+    filter_backends = [
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+
+    search_fields = [
+        "order_number",
+        "full_name",
+        "email",
+        "phone",
+        "county",
+        "town",
+    ]
+
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "total",
+        "status",
+        "payment_status",
+    ]
+
+    ordering = [
+        "-created_at",
+    ]
+
+
+class AdminOrderDetailAPIView(
+    generics.RetrieveUpdateAPIView
+):
+    queryset = (
+        Order.objects
+        .all()
+        .prefetch_related("items")
+    )
+
+    serializer_class = AdminOrderSerializer
+
+    
 class DeliveryFeeView(APIView):
 
     def get(self, request):

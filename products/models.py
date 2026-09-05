@@ -1,14 +1,35 @@
 from django.db import models
 from django.utils.text import slugify
 
-# Create your models here.
+
 class Category(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    slug = models.SlugField(max_length=120, unique=True, blank=True)
-    description = models.TextField(blank=True)
-    image = models.URLField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    name = models.CharField(
+        max_length=100,
+        unique=True
+    )
+
+    slug = models.SlugField(
+        max_length=120,
+        unique=True,
+        blank=True
+    )
+
+    description = models.TextField(
+        blank=True
+    )
+
+    image = models.URLField(
+        blank=True,
+        null=True
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -17,32 +38,67 @@ class Category(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
 
+
 class SpecificationTemplate(models.Model):
     category = models.ForeignKey(
         Category,
-        on_delete= models.CASCADE,
-        related_name= "specifications_templates"
+        on_delete=models.CASCADE,
+        related_name="specifications_templates"
     )
-    name =models.CharField(max_length=100)
-    is_required = models.BooleanField(default=False)
-    sort_order = models.PositiveBigIntegerField(default=0)
+
+    name = models.CharField(
+        max_length=100
+    )
+
+    is_required = models.BooleanField(
+        default=False
+    )
+
+    sort_order = models.PositiveBigIntegerField(
+        default=0
+    )
+
     class Meta:
-        ordering = ["sort_order","name"]
-        unique_together = ("category","name")
+        ordering = [
+            "sort_order",
+            "name"
+        ]
+
+        unique_together = (
+            "category",
+            "name"
+        )
 
     def __str__(self):
         return f"{self.category.name} - {self.name}"
 
+
 class Brand(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    slug = models.SlugField(max_length=120, unique=True, blank=True)
-    logo = models.URLField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
+    name = models.CharField(
+        max_length=100,
+        unique=True
+    )
+
+    slug = models.SlugField(
+        max_length=120,
+        unique=True,
+        blank=True
+    )
+
+    logo = models.URLField(
+        blank=True,
+        null=True
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
 
     class Meta:
         ordering = ["name"]
@@ -50,6 +106,7 @@ class Brand(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -70,7 +127,9 @@ class Product(models.Model):
         ("archived", "Archived"),
     ]
 
-    name = models.CharField(max_length=255)
+    name = models.CharField(
+        max_length=255
+    )
 
     slug = models.SlugField(
         max_length=280,
@@ -101,6 +160,12 @@ class Product(models.Model):
     )
 
     description = models.TextField(
+        blank=True
+    )
+
+    # Product highlights
+    highlights = models.JSONField(
+        default=list,
         blank=True
     )
 
@@ -198,6 +263,7 @@ class Product(models.Model):
         ordering = ["-created_at"]
 
     def save(self, *args, **kwargs):
+
         if not self.slug:
             self.slug = slugify(self.name)
 
@@ -205,12 +271,15 @@ class Product(models.Model):
 
     @property
     def current_price(self):
+
         if self.sale_price is not None:
             return self.sale_price
+
         return self.price
 
     @property
     def is_on_sale(self):
+
         return (
             self.sale_price is not None
             and self.sale_price < self.price
@@ -218,6 +287,7 @@ class Product(models.Model):
 
     @property
     def is_low_stock(self):
+
         return (
             self.stock_quantity > 0
             and self.stock_quantity <= self.low_stock_threshold
@@ -255,7 +325,10 @@ class ProductImage(models.Model):
     )
 
     class Meta:
-        ordering = ["sort_order", "-created_at"]
+        ordering = [
+            "sort_order",
+            "-created_at"
+        ]
 
     def __str__(self):
         return f"{self.product.name} - Image"
@@ -282,7 +355,10 @@ class ProductSpecification(models.Model):
     )
 
     class Meta:
-        ordering = ["sort_order", "name"]
+        ordering = [
+            "sort_order",
+            "name"
+        ]
 
     def __str__(self):
         return f"{self.name}: {self.value}"
