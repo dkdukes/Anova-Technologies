@@ -40,6 +40,7 @@ from .models import (
     ProductImage,
     ProductSpecification,
     SpecificationTemplate,
+    StoreSettings
 )
 
 from .serializers import (
@@ -53,7 +54,8 @@ from .serializers import (
     AdminBrandSerializer,
     AdminBrandDetailSerializer,
     AdminBrandProductSerializer,
-    AdminProductSerializer
+    AdminProductSerializer,
+    StoreSettingsSerializer
 )
 
 from rest_framework.views import APIView
@@ -823,3 +825,48 @@ class ProductSpecificationCreateAPIView(
     queryset = ProductSpecification.objects.all()
 
     serializer_class = ProductSpecificationSerializer
+
+
+
+class AdminStoreSettingsAPIView(APIView):
+
+    def get(self, request):
+        settings = StoreSettings.objects.first()
+
+        if not settings:
+            settings = StoreSettings.objects.create(
+                store_name="Anova Technologies",
+                country="Kenya",
+            )
+
+        serializer = StoreSettingsSerializer(settings)
+
+        return Response(serializer.data)
+
+    def patch(self, request):
+        settings = StoreSettings.objects.first()
+
+        if not settings:
+            settings = StoreSettings.objects.create(
+                store_name="Anova Technologies",
+                country="Kenya",
+            )
+
+        serializer = StoreSettingsSerializer(
+            settings,
+            data=request.data,
+            partial=True,
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )

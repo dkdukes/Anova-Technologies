@@ -7,6 +7,7 @@ from .models import (
     ProductImage,
     ProductSpecification,
     SpecificationTemplate,
+    StoreSettings
 )
 
 
