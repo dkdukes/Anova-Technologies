@@ -809,6 +809,93 @@ class ProductDetailAPIView(
     lookup_field = "slug"
 
 
+class RelatedProductsAPIView(generics.ListAPIView):
+    serializer_class = ProductSerializer
+
+    def get_queryset(self):
+        slug = self.kwargs["slug"]
+
+        # Get the current product
+        try:
+            current_product = Product.objects.select_related(
+                "category",
+                "brand",
+            ).get(
+                slug=slug,
+                status="active",
+            )
+        except Product.DoesNotExist:
+            return Product.objects.none()
+
+        # -------------------------------------------------
+        # 1. Products from the same category
+        # -------------------------------------------------
+        same_category = (
+            Product.objects
+            .filter(
+                status="active",
+                category=current_product.category,
+            )
+            .exclude(id=current_product.id)
+            .select_related(
+                "category",
+                "brand",
+            )
+            .prefetch_related(
+                "images",
+                "specifications",
+            )
+            .order_by("-created_at")
+        )
+
+        # -------------------------------------------------
+        # 2. Accessories
+        # -------------------------------------------------
+        accessories = (
+            Product.objects
+            .filter(
+                status="active",
+                category__name__icontains="accessor",
+            )
+            .exclude(id=current_product.id)
+            .select_related(
+                "category",
+                "brand",
+            )
+            .prefetch_related(
+                "images",
+                "specifications",
+            )
+            .order_by("-created_at")
+        )
+
+        # -------------------------------------------------
+        # Combine products
+        # -------------------------------------------------
+        product_ids = set()
+
+        combined_products = []
+
+        # Add same-category products first
+        for product in same_category:
+            if product.id not in product_ids:
+                combined_products.append(product)
+                product_ids.add(product.id)
+
+            if len(combined_products) >= 4:
+                break
+
+        # Add accessories
+        for product in accessories:
+            if product.id not in product_ids:
+                combined_products.append(product)
+                product_ids.add(product.id)
+
+            if len(combined_products) >= 8:
+                break
+
+        return combined_products
+
 class ProductImageCreateAPIView(
     generics.CreateAPIView
 ):
