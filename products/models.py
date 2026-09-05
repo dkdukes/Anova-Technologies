@@ -334,6 +334,46 @@ class ProductImage(models.Model):
         return f"{self.product.name} - Image"
 
 
+class StoreSettings(models.Model):
+    store_name = models.CharField(
+        max_length=150,
+        default="Anova Technologies"
+    )
+    store_email = models.EmailField(
+        blank=True
+    )
+    phone = models.CharField(
+        max_length=30,
+        blank=True
+    )
+    address = models.CharField(
+        max_length=255,
+        blank=True
+    )
+    city = models.CharField(
+        max_length=100,
+        blank=True
+    )
+    country = models.CharField(
+        max_length=100,
+        default="Kenya"
+    )
+    logo = models.URLField(
+        blank=True,
+        null=True
+    )
+    description = models.TextField(
+        blank=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    def __str__(self):
+        return self.store_name
+
+
 class ProductSpecification(models.Model):
 
     product = models.ForeignKey(
