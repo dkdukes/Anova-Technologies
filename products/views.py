@@ -1,38 +1,13 @@
-from rest_framework import (
-    generics,
-    filters,
-)
+from django.db import models
+from django.db.models import Sum
 
-from .models import (
-    Brand,
-    Category,
-    Product,
-    ProductImage,
-    ProductSpecification,
-    SpecificationTemplate,
-)
-
-from .serializers import (
-    BrandSerializer,
-    CategorySerializer,
-    ProductSerializer,
-    ProductImageSerializer,
-    ProductSpecificationSerializer,
-    SpecificationTemplateSerializer,
-)
-
+from rest_framework import generics, filters, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser
 
 import cloudinary.uploader
 
-from rest_framework import (
-    generics,
-    filters,
-    status,
-)
-
-from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
-
 from .models import (
     Brand,
     Category,
@@ -40,7 +15,9 @@ from .models import (
     ProductImage,
     ProductSpecification,
     SpecificationTemplate,
-    StoreSettings
+    StoreSettings,
+    Course,
+    Usage,
 )
 
 from .serializers import (
@@ -50,23 +27,21 @@ from .serializers import (
     ProductImageSerializer,
     ProductSpecificationSerializer,
     SpecificationTemplateSerializer,
+    UsageSerializer,
+    CourseSerializer,
     AdminCategorySerializer,
     AdminBrandSerializer,
     AdminBrandDetailSerializer,
     AdminBrandProductSerializer,
     AdminProductSerializer,
-    StoreSettingsSerializer
+    StoreSettingsSerializer,
+    LaptopRecommendationSerializer
 )
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from django.db import models
 
-from django.db.models import Sum
-
-from .models import Product
-
+# ============================================================
+# BRAND LOGO UPLOAD
+# ============================================================
 
 class BrandLogoUploadAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser]
@@ -115,7 +90,11 @@ class BrandLogoUploadAPIView(APIView):
 
             if not cloudinary_url:
                 return Response(
-                    {"error": "Cloudinary did not return an image URL."},
+                    {
+                        "error": (
+                            "Cloudinary did not return an image URL."
+                        )
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
@@ -144,69 +123,54 @@ class BrandLogoUploadAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+
+# ============================================================
+# ADMIN PRODUCT IMAGE UPLOAD
+# ============================================================
+
 class AdminProductImageUploadAPIView(APIView):
-    parser_classes = [
-        MultiPartParser,
-        FormParser,
-    ]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, product_id):
 
-        # -------------------------
         # Get product
-        # -------------------------
         try:
-            product = Product.objects.get(
-                id=product_id
-            )
-
+            product = Product.objects.get(id=product_id)
         except Product.DoesNotExist:
             return Response(
-                {
-                    "error": "Product not found."
-                },
+                {"error": "Product not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # -------------------------
         # Get image
-        # -------------------------
         image = request.FILES.get("image")
 
         if not image:
             return Response(
-                {
-                    "error": "No image was provided."
-                },
+                {"error": "No image was provided."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # -------------------------
         # Validate file size
-        # -------------------------
         max_size = 5 * 1024 * 1024
 
         if image.size > max_size:
             return Response(
-                {
-                    "error": "Image size cannot exceed 5MB."
-                },
+                {"error": "Image size cannot exceed 5MB."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # -------------------------
         # Other fields
-        # -------------------------
         alt_text = request.data.get(
             "alt_text",
-            product.name
+            product.name,
         )
 
         is_primary = (
             str(
                 request.data.get(
                     "is_primary",
-                    "false"
+                    "false",
                 )
             ).lower()
             == "true"
@@ -216,27 +180,21 @@ class AdminProductImageUploadAPIView(APIView):
             sort_order = int(
                 request.data.get(
                     "sort_order",
-                    0
+                    0,
                 )
             )
-
         except (TypeError, ValueError):
             sort_order = 0
 
-        # -------------------------
         # Upload to Cloudinary
-        # -------------------------
         try:
-
             result = cloudinary.uploader.upload(
                 image,
                 folder="anova-technologies/products",
                 resource_type="image",
             )
 
-            cloudinary_url = result.get(
-                "secure_url"
-            )
+            cloudinary_url = result.get("secure_url")
 
             if not cloudinary_url:
                 return Response(
@@ -249,21 +207,16 @@ class AdminProductImageUploadAPIView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-            # -------------------------
             # Handle primary image
-            # -------------------------
             if is_primary:
-
                 ProductImage.objects.filter(
                     product=product,
-                    is_primary=True
+                    is_primary=True,
                 ).update(
                     is_primary=False
                 )
 
-            # -------------------------
             # Create ProductImage
-            # -------------------------
             product_image = ProductImage.objects.create(
                 product=product,
                 image_url=cloudinary_url,
@@ -272,25 +225,20 @@ class AdminProductImageUploadAPIView(APIView):
                 sort_order=sort_order,
             )
 
-            # -------------------------
             # Serialize response
-            # -------------------------
             serializer = ProductImageSerializer(
                 product_image
             )
 
             return Response(
                 {
-                    "message": (
-                        "Image uploaded successfully."
-                    ),
+                    "message": "Image uploaded successfully.",
                     "image": serializer.data,
                 },
                 status=status.HTTP_201_CREATED,
             )
 
         except Exception as e:
-
             return Response(
                 {
                     "error": "Image upload failed.",
@@ -299,8 +247,20 @@ class AdminProductImageUploadAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-class AdminBrandListCreateAPIView(generics.ListCreateAPIView):
-    queryset = Brand.objects.all().prefetch_related("products")
+
+# ============================================================
+# ADMIN BRAND
+# ============================================================
+
+class AdminBrandListCreateAPIView(
+    generics.ListCreateAPIView
+):
+    queryset = (
+        Brand.objects
+        .all()
+        .prefetch_related("products")
+    )
+
     serializer_class = AdminBrandSerializer
 
     filter_backends = [
@@ -322,18 +282,24 @@ class AdminBrandListCreateAPIView(generics.ListCreateAPIView):
     ]
 
 
-class AdminBrandDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Brand.objects.all().prefetch_related("products")
+class AdminBrandDetailAPIView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+    queryset = (
+        Brand.objects
+        .all()
+        .prefetch_related("products")
+    )
+
     serializer_class = AdminBrandDetailSerializer
 
 
-
+# ============================================================
+# CATEGORY IMAGE UPLOAD
+# ============================================================
 
 class CategoryImageUploadAPIView(APIView):
-    parser_classes = [
-        MultiPartParser,
-        FormParser,
-    ]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, *args, **kwargs):
 
@@ -343,18 +309,14 @@ class CategoryImageUploadAPIView(APIView):
         # Validate image
         if not image:
             return Response(
-                {
-                    "error": "No image was provided."
-                },
+                {"error": "No image was provided."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Validate category
         if not category_id:
             return Response(
-                {
-                    "error": "category_id is required."
-                },
+                {"error": "category_id is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -363,12 +325,9 @@ class CategoryImageUploadAPIView(APIView):
             category = Category.objects.get(
                 id=category_id
             )
-
         except Category.DoesNotExist:
             return Response(
-                {
-                    "error": "Category not found."
-                },
+                {"error": "Category not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -377,9 +336,7 @@ class CategoryImageUploadAPIView(APIView):
 
         if image.size > max_size:
             return Response(
-                {
-                    "error": "Image must be less than 5MB."
-                },
+                {"error": "Image must be less than 5MB."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -392,14 +349,15 @@ class CategoryImageUploadAPIView(APIView):
                 resource_type="image",
             )
 
-            cloudinary_url = result.get(
-                "secure_url"
-            )
+            cloudinary_url = result.get("secure_url")
 
             if not cloudinary_url:
                 return Response(
                     {
-                        "error": "Cloudinary did not return an image URL."
+                        "error": (
+                            "Cloudinary did not return "
+                            "an image URL."
+                        )
                     },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
@@ -413,7 +371,10 @@ class CategoryImageUploadAPIView(APIView):
 
             return Response(
                 {
-                    "message": "Category image uploaded successfully.",
+                    "message": (
+                        "Category image uploaded "
+                        "successfully."
+                    ),
                     "category": {
                         "id": category.id,
                         "name": category.name,
@@ -425,7 +386,6 @@ class CategoryImageUploadAPIView(APIView):
             )
 
         except Exception as e:
-
             return Response(
                 {
                     "error": "Category image upload failed.",
@@ -435,8 +395,13 @@ class CategoryImageUploadAPIView(APIView):
             )
 
 
+# ============================================================
+# ADMIN CATEGORY
+# ============================================================
 
-class AdminCategoryListCreateAPIView(generics.ListCreateAPIView):
+class AdminCategoryListCreateAPIView(
+    generics.ListCreateAPIView
+):
     queryset = (
         Category.objects
         .all()
@@ -462,7 +427,9 @@ class AdminCategoryListCreateAPIView(generics.ListCreateAPIView):
         "is_active",
     ]
 
-    ordering = ["-created_at"]
+    ordering = [
+        "-created_at"
+    ]
 
 
 class AdminCategoryDetailAPIView(
@@ -477,10 +444,14 @@ class AdminCategoryDetailAPIView(
     serializer_class = AdminCategorySerializer
 
 
+# ============================================================
+# ADMIN DASHBOARD STATS
+# ============================================================
 
 class AdminDashboardStatsAPIView(APIView):
 
     def get(self, request):
+
         total_products = Product.objects.count()
 
         active_products = Product.objects.filter(
@@ -492,7 +463,9 @@ class AdminDashboardStatsAPIView(APIView):
         ).count()
 
         low_stock_products = Product.objects.filter(
-            stock_quantity__lte=models.F("low_stock_threshold")
+            stock_quantity__lte=models.F(
+                "low_stock_threshold"
+            )
         ).count()
 
         total_stock = Product.objects.aggregate(
@@ -508,13 +481,26 @@ class AdminDashboardStatsAPIView(APIView):
         })
 
 
-class AdminProductListAPIView(generics.ListAPIView):
-    queryset = Product.objects.all().select_related(
-        "category",
-        "brand",
-    ).prefetch_related(
-        "images",
-        "specifications",
+# ============================================================
+# ADMIN PRODUCT LIST
+# ============================================================
+
+class AdminProductListAPIView(
+    generics.ListAPIView
+):
+    queryset = (
+        Product.objects
+        .all()
+        .select_related(
+            "category",
+            "brand",
+        )
+        .prefetch_related(
+            "images",
+            "specifications",
+            "usage",
+            "courses",
+        )
     )
 
     serializer_class = AdminProductSerializer
@@ -546,23 +532,38 @@ class AdminProductListAPIView(generics.ListAPIView):
     ]
 
 
+# ============================================================
+# ADMIN PRODUCT DETAIL
+# ============================================================
+
 class AdminProductDetailAPIView(
     generics.RetrieveUpdateDestroyAPIView
 ):
-    queryset = Product.objects.all().select_related(
-        "category",
-        "brand",
-    ).prefetch_related(
-        "images",
-        "specifications",
+    queryset = (
+        Product.objects
+        .all()
+        .select_related(
+            "category",
+            "brand",
+        )
+        .prefetch_related(
+            "images",
+            "specifications",
+            "usage",
+            "courses",
+        )
     )
 
     serializer_class = AdminProductSerializer
 
+
+# ============================================================
+# CATEGORY LIST
+# ============================================================
+
 class CategoryListAPIView(
     generics.ListAPIView
 ):
-
     queryset = Category.objects.filter(
         is_active=True
     )
@@ -578,22 +579,63 @@ class CategoryListAPIView(
     ]
 
 
+# ============================================================
+# USAGE LIST
+# ============================================================
+
+class UsageListAPIView(
+    generics.ListAPIView
+):
+    queryset = (
+        Usage.objects
+        .filter(is_active=True)
+        .order_by("name")
+    )
+
+    serializer_class = UsageSerializer
+
+
+# ============================================================
+# COURSE LIST
+# ============================================================
+
+class CourseListAPIView(
+    generics.ListAPIView
+):
+    queryset = (
+        Course.objects
+        .filter(is_active=True)
+        .select_related("usage")
+        .order_by("name")
+    )
+
+    serializer_class = CourseSerializer
+
+
+# ============================================================
+# ADMIN PRODUCT IMAGE LIST / CREATE
+# ============================================================
+
 class AdminProductImageListCreateAPIView(
     generics.ListCreateAPIView
 ):
     serializer_class = ProductImageSerializer
 
     def get_queryset(self):
+
         product_id = self.kwargs["product_id"]
 
-        return ProductImage.objects.filter(
-            product_id=product_id
-        ).order_by(
-            "sort_order",
-            "-created_at"
+        return (
+            ProductImage.objects
+            .filter(product_id=product_id)
+            .order_by(
+                "sort_order",
+                "-created_at",
+            )
         )
 
     def perform_create(self, serializer):
+
         product_id = self.kwargs["product_id"]
 
         serializer.save(
@@ -601,12 +643,17 @@ class AdminProductImageListCreateAPIView(
         )
 
 
+# ============================================================
+# ADMIN PRODUCT IMAGE DETAIL
+# ============================================================
+
 class AdminProductImageDetailAPIView(
     generics.RetrieveUpdateDestroyAPIView
 ):
     serializer_class = ProductImageSerializer
 
     def get_queryset(self):
+
         product_id = self.kwargs["product_id"]
 
         return ProductImage.objects.filter(
@@ -614,19 +661,26 @@ class AdminProductImageDetailAPIView(
         )
 
 
-class AdminProductImageReplaceAPIView(APIView):
-    parser_classes = [
-        MultiPartParser,
-        FormParser,
-    ]
+# ============================================================
+# ADMIN PRODUCT IMAGE REPLACE
+# ============================================================
 
-    def patch(self, request, product_id, pk):
+class AdminProductImageReplaceAPIView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def patch(
+        self,
+        request,
+        product_id,
+        pk,
+    ):
 
         try:
             product_image = ProductImage.objects.get(
                 id=pk,
                 product_id=product_id,
             )
+
         except ProductImage.DoesNotExist:
             return Response(
                 {"error": "Product image not found."},
@@ -641,23 +695,30 @@ class AdminProductImageReplaceAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 5MB limit
+        # 5 MB limit
         max_size = 5 * 1024 * 1024
 
         if image.size > max_size:
             return Response(
-                {"error": "Image size cannot exceed 5MB."},
+                {
+                    "error": (
+                        "Image size cannot exceed 5MB."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
+
             result = cloudinary.uploader.upload(
                 image,
                 folder="anova-technologies/products",
                 resource_type="image",
             )
 
-            cloudinary_url = result.get("secure_url")
+            cloudinary_url = result.get(
+                "secure_url"
+            )
 
             if not cloudinary_url:
                 return Response(
@@ -670,11 +731,13 @@ class AdminProductImageReplaceAPIView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-            # Replace the existing image URL
+            # Replace existing image URL
             product_image.image_url = cloudinary_url
 
             # Optionally update alt text
-            alt_text = request.data.get("alt_text")
+            alt_text = request.data.get(
+                "alt_text"
+            )
 
             if alt_text is not None:
                 product_image.alt_text = alt_text
@@ -687,7 +750,9 @@ class AdminProductImageReplaceAPIView(APIView):
 
             return Response(
                 {
-                    "message": "Image replaced successfully.",
+                    "message": (
+                        "Image replaced successfully."
+                    ),
                     "image": serializer.data,
                 },
                 status=status.HTTP_200_OK,
@@ -700,12 +765,16 @@ class AdminProductImageReplaceAPIView(APIView):
                     "detail": str(e),
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )    
+            )
+
+
+# ============================================================
+# BRAND LIST
+# ============================================================
 
 class BrandListAPIView(
     generics.ListAPIView
 ):
-
     queryset = Brand.objects.filter(
         is_active=True
     )
@@ -721,16 +790,21 @@ class BrandListAPIView(
     ]
 
 
+# ============================================================
+# SPECIFICATION TEMPLATE LIST
+# ============================================================
+
 class SpecificationTemplateListAPIView(
     generics.ListAPIView
 ):
-
     serializer_class = SpecificationTemplateSerializer
 
     def get_queryset(self):
 
-        category_id = self.request.query_params.get(
-            "category"
+        category_id = (
+            self.request.query_params.get(
+                "category"
+            )
         )
 
         if category_id:
@@ -741,6 +815,10 @@ class SpecificationTemplateListAPIView(
 
         return SpecificationTemplate.objects.none()
 
+
+# ============================================================
+# PRODUCT LIST / CREATE
+# ============================================================
 
 class ProductListAPIView(
     generics.ListCreateAPIView
@@ -756,6 +834,8 @@ class ProductListAPIView(
         .prefetch_related(
             "images",
             "specifications",
+            "usage",
+            "courses",
         )
     )
 
@@ -786,6 +866,965 @@ class ProductListAPIView(
         "-created_at",
     ]
 
+    def get_queryset(self):
+
+        queryset = (
+            Product.objects
+            .filter(status="active")
+            .select_related(
+                "category",
+                "brand",
+            )
+            .prefetch_related(
+                "images",
+                "specifications",
+                "usage",
+                "courses",
+            )
+        )
+
+        # ========================================================
+        # SEARCH
+        # ========================================================
+
+        search = self.request.query_params.get(
+            "search"
+        )
+
+        if search:
+
+            queryset = queryset.filter(
+                models.Q(
+                    name__icontains=search
+                )
+                | models.Q(
+                    sku__icontains=search
+                )
+                | models.Q(
+                    short_description__icontains=search
+                )
+                | models.Q(
+                    description__icontains=search
+                )
+                | models.Q(
+                    brand__name__icontains=search
+                )
+                | models.Q(
+                    category__name__icontains=search
+                )
+            )
+
+        # ========================================================
+        # CATEGORY FILTER
+        # ========================================================
+
+        category = self.request.query_params.get(
+            "category"
+        )
+
+        if category:
+
+            # Accessories should match:
+            # Computer Accessories
+            # Phone Accessories
+            # Laptop Accessories
+            # etc.
+            if category.lower() == "accessories":
+
+                queryset = queryset.filter(
+                    category__name__icontains="accessories"
+                )
+
+            else:
+
+                queryset = queryset.filter(
+                    category__slug__iexact=category
+                )
+
+        # ========================================================
+        # BRAND FILTER
+        # ========================================================
+
+        brand = self.request.query_params.get(
+            "brand"
+        )
+
+        if brand:
+
+            queryset = queryset.filter(
+                brand__slug__iexact=brand
+            )
+
+        # ========================================================
+        # USAGE FILTER
+        # ========================================================
+
+        usage = self.request.query_params.get(
+            "usage"
+        )
+
+        if usage:
+
+            queryset = queryset.filter(
+                usage__slug__iexact=usage
+            ).distinct()
+
+        # ========================================================
+        # COURSE FILTER
+        # ========================================================
+
+        course = self.request.query_params.get(
+            "course"
+        )
+
+        if course:
+
+            queryset = queryset.filter(
+                courses__slug__iexact=course
+            ).distinct()
+
+        # ========================================================
+        # FLASH SALE
+        # ========================================================
+
+        sale = self.request.query_params.get(
+            "sale"
+        )
+
+        if sale and sale.lower() == "true":
+
+            queryset = queryset.filter(
+                sale_price__isnull=False,
+                sale_price__lt=models.F("price"),
+                stock_quantity__gt=0,
+            )
+
+        return queryset
+
+
+# ============================================================
+# LAPTOP RECOMMENDATION ENGINE
+# ============================================================
+
+def normalize_text(value):
+    """
+    Convert specification text into a normalized lowercase string.
+    """
+
+    if value is None:
+        return ""
+
+    return str(value).strip().lower()
+
+
+def get_product_specifications(product):
+    """
+    Convert ProductSpecification records into a dictionary.
+
+    Example:
+
+    {
+        "processor": "Intel Core i5",
+        "ram": "16GB",
+        "storage": "512GB SSD",
+        "graphics": "Intel Iris Xe"
+    }
+    """
+
+    specs = {}
+
+    for specification in product.specifications.all():
+
+        name = normalize_text(
+            specification.name
+        )
+
+        value = normalize_text(
+            specification.value
+        )
+
+        if name:
+            specs[name] = value
+
+    return specs
+
+
+def find_specification(specs, keywords):
+    """
+    Find a specification using multiple possible names.
+
+    For example:
+    RAM may be stored as:
+        RAM
+        Memory
+        System Memory
+    """
+
+    for name, value in specs.items():
+
+        for keyword in keywords:
+
+            if keyword in name:
+                return value
+
+    return ""
+
+
+def extract_number(value):
+    """
+    Extract the first numeric value from a string.
+
+    Examples:
+
+        '16GB'       -> 16
+        '512 GB SSD' -> 512
+        'Core i5'    -> 5
+    """
+
+    import re
+
+    if not value:
+        return None
+
+    match = re.search(
+        r"\d+(?:\.\d+)?",
+        str(value)
+    )
+
+    if not match:
+        return None
+
+    try:
+        return float(match.group())
+
+    except ValueError:
+        return None
+
+
+def get_ram_gb(specs):
+    """
+    Extract RAM amount in GB.
+    """
+
+    value = find_specification(
+        specs,
+        [
+            "ram",
+            "memory",
+        ]
+    )
+
+    number = extract_number(value)
+
+    if number is None:
+        return 0
+
+    return int(number)
+
+
+def get_storage_gb(specs):
+    """
+    Extract storage capacity.
+
+    Handles:
+        256GB
+        512GB
+        1TB
+        2TB
+    """
+
+    value = find_specification(
+        specs,
+        [
+            "storage",
+            "hard drive",
+            "hard disk",
+            "disk",
+            "ssd",
+            "hdd",
+        ]
+    )
+
+    if not value:
+        return 0
+
+    number = extract_number(value)
+
+    if number is None:
+        return 0
+
+    value_lower = value.lower()
+
+    if "tb" in value_lower:
+        return int(number * 1024)
+
+    return int(number)
+
+
+def get_cpu_score(specs):
+    """
+    Estimate CPU performance.
+
+    This deliberately supports common Intel and AMD naming.
+    """
+
+    cpu = find_specification(
+        specs,
+        [
+            "processor",
+            "cpu",
+            "chipset",
+        ]
+    )
+
+    cpu = cpu.lower()
+
+    if not cpu:
+        return 0
+
+    score = 0
+
+    # --------------------------------------------------------
+    # Intel
+    # --------------------------------------------------------
+
+    if "core i9" in cpu:
+        score = 40
+
+    elif "core i7" in cpu:
+        score = 35
+
+    elif "core i5" in cpu:
+        score = 30
+
+    elif "core i3" in cpu:
+        score = 20
+
+    # --------------------------------------------------------
+    # Intel Core Ultra
+    # --------------------------------------------------------
+
+    elif "ultra 9" in cpu:
+        score = 40
+
+    elif "ultra 7" in cpu:
+        score = 35
+
+    elif "ultra 5" in cpu:
+        score = 30
+
+    # --------------------------------------------------------
+    # AMD Ryzen
+    # --------------------------------------------------------
+
+    elif "ryzen 9" in cpu:
+        score = 40
+
+    elif "ryzen 7" in cpu:
+        score = 35
+
+    elif "ryzen 5" in cpu:
+        score = 30
+
+    elif "ryzen 3" in cpu:
+        score = 20
+
+    # --------------------------------------------------------
+    # Apple
+    # --------------------------------------------------------
+
+    elif "m4" in cpu:
+        score = 40
+
+    elif "m3" in cpu:
+        score = 38
+
+    elif "m2" in cpu:
+        score = 35
+
+    elif "m1" in cpu:
+        score = 32
+
+    return score
+
+
+def get_gpu_score(specs):
+    """
+    Estimate graphics capability.
+    """
+
+    gpu = find_specification(
+        specs,
+        [
+            "graphics",
+            "gpu",
+            "video",
+            "graphics card",
+        ]
+    )
+
+    gpu = gpu.lower()
+
+    if not gpu:
+        return 0
+
+    # Dedicated GPUs
+    if (
+        "rtx 4090" in gpu
+        or "rtx 4080" in gpu
+        or "rtx 4070" in gpu
+    ):
+        return 30
+
+    if (
+        "rtx 4060" in gpu
+        or "rtx 4050" in gpu
+    ):
+        return 27
+
+    if (
+        "rtx 3060" in gpu
+        or "rtx 3050" in gpu
+    ):
+        return 24
+
+    if "gtx 1660" in gpu:
+        return 22
+
+    if "gtx 1650" in gpu:
+        return 20
+
+    if "radeon rx" in gpu:
+        return 24
+
+    # Integrated graphics
+    if "iris xe" in gpu:
+        return 12
+
+    if "radeon graphics" in gpu:
+        return 10
+
+    if "uhd graphics" in gpu:
+        return 8
+
+    if "vega" in gpu:
+        return 8
+
+    return 5
+
+
+def get_usage_match_score(product, usage_slug):
+    """
+    Score how closely the product is associated with
+    the selected usage.
+    """
+
+    if not usage_slug:
+        return 0
+
+    usage_slug = usage_slug.lower()
+
+    for usage in product.usage.all():
+
+        if (
+            usage.slug.lower() == usage_slug
+            or usage.name.lower() == usage_slug
+        ):
+            return 20
+
+    return 0
+
+
+def get_course_match_score(product, course_slug):
+    """
+    Score how closely the laptop is associated with
+    the selected course.
+    """
+
+    if not course_slug:
+        return 0
+
+    course_slug = course_slug.lower()
+
+    for course in product.courses.all():
+
+        if (
+            course.slug.lower() == course_slug
+            or course.name.lower() == course_slug
+        ):
+            return 15
+
+    return 0
+
+
+def get_usage_requirements(
+    usage_slug=None,
+    course_slug=None,
+):
+    """
+    Determine the technical requirements based on usage.
+
+    These are baseline requirements, not hard filters.
+    """
+
+    usage = (
+        usage_slug or ""
+    ).lower()
+
+    course = (
+        course_slug or ""
+    ).lower()
+
+    requirements = {
+        "min_ram": 8,
+        "min_storage": 256,
+        "min_cpu_score": 20,
+        "gpu_required": False,
+    }
+
+    # --------------------------------------------------------
+    # Student
+    # --------------------------------------------------------
+
+    if "student" in usage:
+
+        requirements.update({
+            "min_ram": 8,
+            "min_storage": 256,
+            "min_cpu_score": 20,
+        })
+
+    # --------------------------------------------------------
+    # Programming
+    # --------------------------------------------------------
+
+    elif (
+        "program" in usage
+        or "developer" in usage
+        or "coding" in usage
+    ):
+
+        requirements.update({
+            "min_ram": 16,
+            "min_storage": 512,
+            "min_cpu_score": 30,
+        })
+
+    # --------------------------------------------------------
+    # Gaming
+    # --------------------------------------------------------
+
+    elif "gaming" in usage:
+
+        requirements.update({
+            "min_ram": 16,
+            "min_storage": 512,
+            "min_cpu_score": 30,
+            "gpu_required": True,
+        })
+
+    # --------------------------------------------------------
+    # Design / Creative
+    # --------------------------------------------------------
+
+    elif (
+        "design" in usage
+        or "creative" in usage
+        or "graphic" in usage
+    ):
+
+        requirements.update({
+            "min_ram": 16,
+            "min_storage": 512,
+            "min_cpu_score": 30,
+            "gpu_required": True,
+        })
+
+    # --------------------------------------------------------
+    # Business
+    # --------------------------------------------------------
+
+    elif "business" in usage:
+
+        requirements.update({
+            "min_ram": 8,
+            "min_storage": 256,
+            "min_cpu_score": 20,
+        })
+
+    # --------------------------------------------------------
+    # Professional
+    # --------------------------------------------------------
+
+    elif "professional" in usage:
+
+        requirements.update({
+            "min_ram": 16,
+            "min_storage": 512,
+            "min_cpu_score": 30,
+        })
+
+    # --------------------------------------------------------
+    # Course-specific improvements
+    # --------------------------------------------------------
+
+    if any(
+        keyword in course
+        for keyword in [
+            "computer-science",
+            "computer science",
+            "software-engineering",
+            "software engineering",
+            "information-technology",
+            "information technology",
+            "cyber-security",
+            "cyber security",
+        ]
+    ):
+
+        requirements.update({
+            "min_ram": max(
+                requirements["min_ram"],
+                16,
+            ),
+            "min_storage": max(
+                requirements["min_storage"],
+                512,
+            ),
+            "min_cpu_score": max(
+                requirements["min_cpu_score"],
+                30,
+            ),
+        })
+
+    if any(
+        keyword in course
+        for keyword in [
+            "data-science",
+            "data science",
+            "machine-learning",
+            "machine learning",
+            "artificial-intelligence",
+            "artificial intelligence",
+        ]
+    ):
+
+        requirements.update({
+            "min_ram": 16,
+            "min_storage": 512,
+            "min_cpu_score": 35,
+        })
+
+    return requirements
+
+
+def calculate_laptop_score(
+    product,
+    usage_slug=None,
+    course_slug=None,
+):
+    """
+    Calculate a suitability score for a laptop.
+
+    Maximum score: 100
+    """
+
+    specs = get_product_specifications(
+        product
+    )
+
+    requirements = get_usage_requirements(
+        usage_slug,
+        course_slug,
+    )
+
+    score = 0
+
+    reasons = []
+
+    # ========================================================
+    # USAGE MATCH
+    # ========================================================
+
+    usage_score = get_usage_match_score(
+        product,
+        usage_slug,
+    )
+
+    if usage_score:
+
+        score += usage_score
+
+        reasons.append(
+            "Matches your selected usage"
+        )
+
+    # ========================================================
+    # COURSE MATCH
+    # ========================================================
+
+    course_score = get_course_match_score(
+        product,
+        course_slug,
+    )
+
+    if course_score:
+
+        score += course_score
+
+        reasons.append(
+            "Matches your selected course"
+        )
+
+    # ========================================================
+    # RAM
+    # ========================================================
+
+    ram = get_ram_gb(specs)
+
+    if ram >= requirements["min_ram"]:
+
+        score += 15
+
+        reasons.append(
+            f"{ram}GB RAM meets the recommended requirement"
+        )
+
+    elif ram >= 8:
+
+        score += 8
+
+        reasons.append(
+            f"{ram}GB RAM is suitable for basic use"
+        )
+
+    # ========================================================
+    # STORAGE
+    # ========================================================
+
+    storage = get_storage_gb(specs)
+
+    if storage >= requirements["min_storage"]:
+
+        score += 10
+
+        reasons.append(
+            f"{storage}GB storage meets the recommended requirement"
+        )
+
+    elif storage >= 256:
+
+        score += 5
+
+    # ========================================================
+    # CPU
+    # ========================================================
+
+    cpu_score = get_cpu_score(specs)
+
+    if cpu_score >= requirements["min_cpu_score"]:
+
+        score += 15
+
+        reasons.append(
+            "Processor meets the recommended performance level"
+        )
+
+    elif cpu_score > 0:
+
+        score += 7
+
+    # ========================================================
+    # GPU
+    # ========================================================
+
+    gpu_score = get_gpu_score(specs)
+
+    if requirements["gpu_required"]:
+
+        if gpu_score >= 20:
+
+            score += 15
+
+            reasons.append(
+                "Dedicated graphics are suitable for this workload"
+            )
+
+        elif gpu_score > 0:
+
+            score += 5
+
+    else:
+
+        if gpu_score >= 20:
+
+            score += 5
+
+    # ========================================================
+    # STOCK
+    # ========================================================
+
+    if product.stock_quantity > 0:
+
+        score += 5
+
+        reasons.append(
+            "Currently in stock"
+        )
+
+    # ========================================================
+    # FEATURED
+    # ========================================================
+
+    if product.is_featured:
+
+        score += 3
+
+    # ========================================================
+    # SALE
+    # ========================================================
+
+    if product.is_on_sale:
+
+        score += 2
+
+        reasons.append(
+            "Currently on sale"
+        )
+
+    # ========================================================
+    # CAP SCORE AT 100
+    # ========================================================
+
+    score = min(
+        score,
+        100
+    )
+
+    # ========================================================
+    # LABEL
+    # ========================================================
+
+    if score >= 85:
+
+        label = "Excellent Match"
+
+    elif score >= 70:
+
+        label = "Very Good Match"
+
+    elif score >= 55:
+
+        label = "Good Match"
+
+    elif score >= 40:
+
+        label = "Suitable"
+
+    else:
+
+        label = "Basic Match"
+
+    return (
+        score,
+        label,
+        reasons[:5],
+    )
+
+
+# ============================================================
+# LAPTOP RECOMMENDATION API
+# ============================================================
+
+class LaptopRecommendationAPIView(
+    generics.ListAPIView
+):
+
+    serializer_class = LaptopRecommendationSerializer
+
+    def get_queryset(self):
+
+        usage_slug = (
+            self.request.query_params.get(
+                "usage"
+            )
+        )
+
+        course_slug = (
+            self.request.query_params.get(
+                "course"
+            )
+        )
+
+        # ----------------------------------------------------
+        # Get ALL available laptops
+        # ----------------------------------------------------
+
+        products = list(
+            Product.objects
+            .filter(
+                status="active",
+                stock_quantity__gt=0,
+                category__slug__iexact="laptops",
+            )
+            .select_related(
+                "category",
+                "brand",
+            )
+            .prefetch_related(
+                "images",
+                "specifications",
+                "usage",
+                "courses",
+            )
+            .distinct()
+        )
+
+        # ----------------------------------------------------
+        # Score EVERY laptop
+        # ----------------------------------------------------
+
+        scored_products = []
+
+        for product in products:
+
+            (
+                score,
+                label,
+                reasons,
+            ) = calculate_laptop_score(
+                product,
+                usage_slug,
+                course_slug,
+            )
+
+            # Attach temporary recommendation data
+            product.recommendation_score = score
+            product.recommendation_label = label
+            product.recommendation_reasons = reasons
+
+            scored_products.append(
+                product
+            )
+
+        # ----------------------------------------------------
+        # Sort highest score first
+        # ----------------------------------------------------
+
+        scored_products.sort(
+            key=lambda product: (
+                product.recommendation_score,
+                product.stock_quantity,
+                product.is_featured,
+            ),
+            reverse=True,
+        )
+
+        return scored_products
+
+# ============================================================
+# PRODUCT DETAIL
+# ============================================================
 
 class ProductDetailAPIView(
     generics.RetrieveAPIView
@@ -801,6 +1840,8 @@ class ProductDetailAPIView(
         .prefetch_related(
             "images",
             "specifications",
+            "usage",
+            "courses",
         )
     )
 
@@ -809,34 +1850,51 @@ class ProductDetailAPIView(
     lookup_field = "slug"
 
 
-class RelatedProductsAPIView(generics.ListAPIView):
+# ============================================================
+# RELATED PRODUCTS
+# ============================================================
+
+class RelatedProductsAPIView(
+    generics.ListAPIView
+):
     serializer_class = ProductSerializer
 
     def get_queryset(self):
+
         slug = self.kwargs["slug"]
 
-        # Get the current product
+        # Get current product
         try:
-            current_product = Product.objects.select_related(
-                "category",
-                "brand",
-            ).get(
-                slug=slug,
-                status="active",
+
+            current_product = (
+                Product.objects
+                .select_related(
+                    "category",
+                    "brand",
+                )
+                .get(
+                    slug=slug,
+                    status="active",
+                )
             )
+
         except Product.DoesNotExist:
+
             return Product.objects.none()
 
-        # -------------------------------------------------
-        # 1. Products from the same category
-        # -------------------------------------------------
+        # ========================================================
+        # SAME CATEGORY
+        # ========================================================
+
         same_category = (
             Product.objects
             .filter(
                 status="active",
                 category=current_product.category,
             )
-            .exclude(id=current_product.id)
+            .exclude(
+                id=current_product.id
+            )
             .select_related(
                 "category",
                 "brand",
@@ -844,20 +1902,25 @@ class RelatedProductsAPIView(generics.ListAPIView):
             .prefetch_related(
                 "images",
                 "specifications",
+                "usage",
+                "courses",
             )
             .order_by("-created_at")
         )
 
-        # -------------------------------------------------
-        # 2. Accessories
-        # -------------------------------------------------
+        # ========================================================
+        # ACCESSORIES
+        # ========================================================
+
         accessories = (
             Product.objects
             .filter(
                 status="active",
                 category__name__icontains="accessor",
             )
-            .exclude(id=current_product.id)
+            .exclude(
+                id=current_product.id
+            )
             .select_related(
                 "category",
                 "brand",
@@ -865,36 +1928,57 @@ class RelatedProductsAPIView(generics.ListAPIView):
             .prefetch_related(
                 "images",
                 "specifications",
+                "usage",
+                "courses",
             )
             .order_by("-created_at")
         )
 
-        # -------------------------------------------------
-        # Combine products
-        # -------------------------------------------------
-        product_ids = set()
+        # ========================================================
+        # COMBINE PRODUCTS
+        # ========================================================
 
+        product_ids = set()
         combined_products = []
 
-        # Add same-category products first
+        # Same category first
         for product in same_category:
+
             if product.id not in product_ids:
-                combined_products.append(product)
-                product_ids.add(product.id)
+
+                combined_products.append(
+                    product
+                )
+
+                product_ids.add(
+                    product.id
+                )
 
             if len(combined_products) >= 4:
                 break
 
-        # Add accessories
+        # Accessories
         for product in accessories:
+
             if product.id not in product_ids:
-                combined_products.append(product)
-                product_ids.add(product.id)
+
+                combined_products.append(
+                    product
+                )
+
+                product_ids.add(
+                    product.id
+                )
 
             if len(combined_products) >= 8:
                 break
 
         return combined_products
+
+
+# ============================================================
+# PRODUCT IMAGE CREATE
+# ============================================================
 
 class ProductImageCreateAPIView(
     generics.CreateAPIView
@@ -905,6 +1989,10 @@ class ProductImageCreateAPIView(
     serializer_class = ProductImageSerializer
 
 
+# ============================================================
+# PRODUCT SPECIFICATION CREATE
+# ============================================================
+
 class ProductSpecificationCreateAPIView(
     generics.CreateAPIView
 ):
@@ -914,26 +2002,37 @@ class ProductSpecificationCreateAPIView(
     serializer_class = ProductSpecificationSerializer
 
 
+# ============================================================
+# ADMIN STORE SETTINGS
+# ============================================================
 
 class AdminStoreSettingsAPIView(APIView):
 
     def get(self, request):
+
         settings = StoreSettings.objects.first()
 
         if not settings:
+
             settings = StoreSettings.objects.create(
                 store_name="Anova Technologies",
                 country="Kenya",
             )
 
-        serializer = StoreSettingsSerializer(settings)
+        serializer = StoreSettingsSerializer(
+            settings
+        )
 
-        return Response(serializer.data)
+        return Response(
+            serializer.data
+        )
 
     def patch(self, request):
+
         settings = StoreSettings.objects.first()
 
         if not settings:
+
             settings = StoreSettings.objects.create(
                 store_name="Anova Technologies",
                 country="Kenya",
@@ -946,6 +2045,7 @@ class AdminStoreSettingsAPIView(APIView):
         )
 
         if serializer.is_valid():
+
             serializer.save()
 
             return Response(

@@ -113,6 +113,48 @@ class Brand(models.Model):
         return self.name
 
 
+class Usage(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class Course(models.Model):
+    name = models.CharField(max_length=150, unique=True)
+    slug = models.SlugField(max_length=170, unique=True, blank=True)
+
+    usage = models.ForeignKey(
+        Usage,
+        on_delete=models.CASCADE,
+        related_name="courses"
+    )
+
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
 class Product(models.Model):
 
     CONDITION_CHOICES = [
@@ -151,6 +193,18 @@ class Product(models.Model):
     brand = models.ForeignKey(
         Brand,
         on_delete=models.PROTECT,
+        related_name="products"
+    )
+
+    usage = models.ManyToManyField(
+        Usage,
+        blank=True,
+        related_name="products"
+    )
+
+    courses = models.ManyToManyField(
+        Course,
+        blank=True,
         related_name="products"
     )
 
@@ -402,3 +456,5 @@ class ProductSpecification(models.Model):
 
     def __str__(self):
         return f"{self.name}: {self.value}"
+
+

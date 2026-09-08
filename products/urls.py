@@ -26,7 +26,8 @@ from .views import (
     AdminProductImageUploadAPIView,
     AdminProductImageReplaceAPIView,
     AdminStoreSettingsAPIView,
-    RelatedProductsAPIView
+    RelatedProductsAPIView,
+    LaptopRecommendationAPIView
 )
 
 
@@ -197,6 +198,13 @@ urlpatterns = [
     "products/<slug:slug>/related/",
     RelatedProductsAPIView.as_view(),
     name="related-products",
+    ),
+
+
+   path(
+        "products/recommendations/",
+        LaptopRecommendationAPIView.as_view(),
+        name="laptop-recommendations",
     ),
 
 ]

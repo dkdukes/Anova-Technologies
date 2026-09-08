@@ -1,16 +1,25 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+
 from .models import CustomUser
 
-# Register your models here.
+
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
+
     list_display = (
         "username",
         "email",
         "first_name",
         "last_name",
         "phone",
+        "role",
+        "is_staff",
+        "is_active",
+    )
+
+    list_filter = (
+        "role",
         "is_staff",
         "is_active",
     )
@@ -19,4 +28,33 @@ class CustomUserAdmin(UserAdmin):
         "username",
         "email",
         "phone",
+        "first_name",
+        "last_name",
+    )
+
+    fieldsets = UserAdmin.fieldsets + (
+        (
+            "Anova Information",
+            {
+                "fields": (
+                    "phone",
+                    "profile_image",
+                    "role",
+                )
+            },
+        ),
+    )
+
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        (
+            "Anova Information",
+            {
+                "fields": (
+                    "email",
+                    "phone",
+                    "profile_image",
+                    "role",
+                )
+            },
+        ),
     )
