@@ -20,7 +20,7 @@ from .models import (
     Usage,
 )
 
-from accounts.permissions import IsStaffOrAdmin
+from accounts.permissions import IsStaffOrAdmin,IsAdmin
 
 from .serializers import (
     BrandSerializer,
@@ -2039,7 +2039,7 @@ class ProductSpecificationCreateAPIView(
 # ============================================================
 
 class AdminStoreSettingsAPIView(APIView):
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [IsAdmin]
 
 
     def get(self, request):
