@@ -20,6 +20,8 @@ from .models import (
     Usage,
 )
 
+from accounts.permissions import IsStaffOrAdmin
+
 from .serializers import (
     BrandSerializer,
     CategorySerializer,
@@ -44,6 +46,8 @@ from .serializers import (
 # ============================================================
 
 class BrandLogoUploadAPIView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, *args, **kwargs):
@@ -129,6 +133,8 @@ class BrandLogoUploadAPIView(APIView):
 # ============================================================
 
 class AdminProductImageUploadAPIView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, product_id):
@@ -255,6 +261,8 @@ class AdminProductImageUploadAPIView(APIView):
 class AdminBrandListCreateAPIView(
     generics.ListCreateAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
     queryset = (
         Brand.objects
         .all()
@@ -285,6 +293,8 @@ class AdminBrandListCreateAPIView(
 class AdminBrandDetailAPIView(
     generics.RetrieveUpdateDestroyAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
     queryset = (
         Brand.objects
         .all()
@@ -299,6 +309,8 @@ class AdminBrandDetailAPIView(
 # ============================================================
 
 class CategoryImageUploadAPIView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, *args, **kwargs):
@@ -402,6 +414,8 @@ class CategoryImageUploadAPIView(APIView):
 class AdminCategoryListCreateAPIView(
     generics.ListCreateAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
     queryset = (
         Category.objects
         .all()
@@ -435,6 +449,8 @@ class AdminCategoryListCreateAPIView(
 class AdminCategoryDetailAPIView(
     generics.RetrieveUpdateDestroyAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
     queryset = (
         Category.objects
         .all()
@@ -449,6 +465,8 @@ class AdminCategoryDetailAPIView(
 # ============================================================
 
 class AdminDashboardStatsAPIView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
 
     def get(self, request):
 
@@ -488,6 +506,8 @@ class AdminDashboardStatsAPIView(APIView):
 class AdminProductListAPIView(
     generics.ListAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
     queryset = (
         Product.objects
         .all()
@@ -539,6 +559,8 @@ class AdminProductListAPIView(
 class AdminProductDetailAPIView(
     generics.RetrieveUpdateDestroyAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
     queryset = (
         Product.objects
         .all()
@@ -619,6 +641,8 @@ class CourseListAPIView(
 class AdminProductImageListCreateAPIView(
     generics.ListCreateAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
     serializer_class = ProductImageSerializer
 
     def get_queryset(self):
@@ -650,6 +674,8 @@ class AdminProductImageListCreateAPIView(
 class AdminProductImageDetailAPIView(
     generics.RetrieveUpdateDestroyAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
     serializer_class = ProductImageSerializer
 
     def get_queryset(self):
@@ -666,6 +692,8 @@ class AdminProductImageDetailAPIView(
 # ============================================================
 
 class AdminProductImageReplaceAPIView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
     parser_classes = [MultiPartParser, FormParser]
 
     def patch(
@@ -1983,6 +2011,8 @@ class RelatedProductsAPIView(
 class ProductImageCreateAPIView(
     generics.CreateAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
 
     queryset = ProductImage.objects.all()
 
@@ -1996,6 +2026,8 @@ class ProductImageCreateAPIView(
 class ProductSpecificationCreateAPIView(
     generics.CreateAPIView
 ):
+    permission_classes = [IsStaffOrAdmin]
+
 
     queryset = ProductSpecification.objects.all()
 
@@ -2007,6 +2039,8 @@ class ProductSpecificationCreateAPIView(
 # ============================================================
 
 class AdminStoreSettingsAPIView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
 
     def get(self, request):
 

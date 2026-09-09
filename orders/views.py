@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,10 +11,12 @@ from products.models import Product
 
 from .models import Order, OrderItem
 from .serializers import OrderSerializer, AdminOrderSerializer
-from decimal import Decimal
+
 from payments.models import Payment
 from payments.mpesa import MpesaService
 from payments.utils import normalize_kenyan_phone
+
+from accounts.permissions import IsStaffOrAdmin
 
 
 def get_delivery_fee(county):
@@ -75,6 +78,7 @@ def get_delivery_fee(county):
         Decimal("500.00"),
     )
 
+
 class CreateOrderView(APIView):
 
     @transaction.atomic
@@ -94,17 +98,17 @@ class CreateOrderView(APIView):
 
         full_name = customer.get(
             "full_name",
-            ""
+            "",
         ).strip()
 
         email = customer.get(
             "email",
-            ""
+            "",
         ).strip()
 
         phone = customer.get(
             "phone",
-            ""
+            "",
         ).strip()
 
         if not full_name:
@@ -146,17 +150,17 @@ class CreateOrderView(APIView):
 
         county = delivery.get(
             "county",
-            ""
+            "",
         ).strip()
 
         town = delivery.get(
             "town",
-            ""
+            "",
         ).strip()
 
         address = delivery.get(
             "address",
-            ""
+            "",
         ).strip()
 
         if not county:
@@ -434,7 +438,6 @@ class CreateOrderView(APIView):
         # M-PESA PAYMENT
         # -----------------------------------------
 
-
         # -----------------------------------------
         # Create payment record
         # -----------------------------------------
@@ -565,7 +568,13 @@ class CreateOrderView(APIView):
         )
 
 
-class AdminOrderListAPIView(generics.ListAPIView):
+# =================================================
+# ADMIN ORDERS
+# =================================================
+
+class AdminOrderListAPIView(
+    generics.ListAPIView
+):
     queryset = (
         Order.objects
         .all()
@@ -573,6 +582,11 @@ class AdminOrderListAPIView(generics.ListAPIView):
     )
 
     serializer_class = AdminOrderSerializer
+
+    # Staff and Admin only
+    permission_classes = [
+        IsStaffOrAdmin
+    ]
 
     filter_backends = [
         filters.SearchFilter,
@@ -612,13 +626,19 @@ class AdminOrderDetailAPIView(
 
     serializer_class = AdminOrderSerializer
 
-    
+    # Staff and Admin only
+    permission_classes = [
+        IsStaffOrAdmin
+    ]
+
+
 class DeliveryFeeView(APIView):
 
     def get(self, request):
+
         county = request.query_params.get(
             "county",
-            ""
+            "",
         ).strip()
 
         if not county:
@@ -629,12 +649,16 @@ class DeliveryFeeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        delivery_fee = get_delivery_fee(county)
+        delivery_fee = get_delivery_fee(
+            county
+        )
 
         return Response(
             {
                 "county": county,
-                "delivery_fee": str(delivery_fee),
+                "delivery_fee": str(
+                    delivery_fee
+                ),
             },
             status=status.HTTP_200_OK,
         )
