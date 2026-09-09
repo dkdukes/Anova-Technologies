@@ -1,7 +1,24 @@
+
 from rest_framework import generics, filters
+from rest_framework_simplejwt.views import TokenObtainPairView
+
 
 from .models import CustomUser
-from .serializers import AdminCustomerSerializer
+from .serializers import (
+    AdminCustomerSerializer,
+    RegisterSerializer,
+    LoginSerializer
+)
+
+
+class RegisterAPIView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+    permission_classes = []
+
+
+
+class LoginAPIView(TokenObtainPairView):
+    serializer_class = LoginSerializer
 
 
 class AdminCustomerListAPIView(generics.ListAPIView):
@@ -36,3 +53,4 @@ class AdminCustomerDetailAPIView(generics.RetrieveAPIView):
     queryset = CustomUser.objects.all()
 
     serializer_class = AdminCustomerSerializer
+
