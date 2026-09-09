@@ -2,13 +2,13 @@
 from rest_framework import generics, filters
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-
 from .models import CustomUser
 from .serializers import (
     AdminCustomerSerializer,
     RegisterSerializer,
-    LoginSerializer
+    LoginSerializer,
 )
+from .permissions import IsStaffOrAdmin
 
 
 class RegisterAPIView(generics.CreateAPIView):
@@ -16,15 +16,17 @@ class RegisterAPIView(generics.CreateAPIView):
     permission_classes = []
 
 
-
 class LoginAPIView(TokenObtainPairView):
     serializer_class = LoginSerializer
+    permission_classes = []
 
 
 class AdminCustomerListAPIView(generics.ListAPIView):
     queryset = CustomUser.objects.all().order_by("-created_at")
 
     serializer_class = AdminCustomerSerializer
+
+    permission_classes = [IsStaffOrAdmin]
 
     filter_backends = [
         filters.SearchFilter,
@@ -53,4 +55,6 @@ class AdminCustomerDetailAPIView(generics.RetrieveAPIView):
     queryset = CustomUser.objects.all()
 
     serializer_class = AdminCustomerSerializer
+
+    permission_classes = [IsStaffOrAdmin]
 
