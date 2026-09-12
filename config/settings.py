@@ -53,7 +53,7 @@ DEBUG = bool(os.getenv("DEBUG"))
 
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost"
+    "127.0.0.1,localhost","https://anova-technologies.onrender.com/"
 ).split(",")
 
 
