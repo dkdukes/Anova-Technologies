@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -80,488 +81,293 @@ def get_delivery_fee(county):
 
 
 class CreateOrderView(APIView):
+    """Create an order using trusted database prices, then initiate payment."""
 
-    @transaction.atomic
     def post(self, request):
+        customer = request.data.get("customer") or {}
+        delivery = request.data.get("delivery") or {}
+        items = request.data.get("items") or []
+        payment_method = request.data.get("payment_method", "mpesa")
 
-        customer = request.data.get("customer", {})
-        delivery = request.data.get("delivery", {})
-        items = request.data.get("items", [])
-        payment_method = request.data.get(
-            "payment_method",
-            "mpesa",
-        )
+        # Validate payload structure before accessing fields.
+        if not isinstance(customer, dict) or not isinstance(delivery, dict):
+            return Response(
+                {"error": "Invalid customer or delivery information."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # -----------------------------------------
-        # Validate customer information
-        # -----------------------------------------
+        if not isinstance(items, list) or not items:
+            return Response(
+                {"error": "Your cart is empty."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        full_name = customer.get(
-            "full_name",
-            "",
-        ).strip()
-
-        email = customer.get(
-            "email",
-            "",
-        ).strip()
-
-        phone = customer.get(
-            "phone",
-            "",
-        ).strip()
+        # Validate customer information.
+        full_name = str(customer.get("full_name") or "").strip()
+        email = str(customer.get("email") or "").strip()
+        phone = str(customer.get("phone") or "").strip()
 
         if not full_name:
             return Response(
                 {"error": "Full name is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         if not email:
             return Response(
                 {"error": "Email is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         if not phone:
             return Response(
                 {"error": "Phone number is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        normalized_phone = normalize_kenyan_phone(
-            phone
-        )
-
+        normalized_phone = normalize_kenyan_phone(phone)
         if not normalized_phone:
             return Response(
-                {
-                    "error": (
-                        "Please enter a valid "
-                        "Kenyan phone number."
-                    )
-                },
+                {"error": "Please enter a valid Kenyan phone number."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # -----------------------------------------
-        # Validate delivery information
-        # -----------------------------------------
-
-        county = delivery.get(
-            "county",
-            "",
-        ).strip()
-
-        town = delivery.get(
-            "town",
-            "",
-        ).strip()
-
-        address = delivery.get(
-            "address",
-            "",
-        ).strip()
+        # Validate delivery information.
+        county = str(delivery.get("county") or "").strip()
+        town = str(delivery.get("town") or "").strip()
+        address = str(delivery.get("address") or "").strip()
 
         if not county:
             return Response(
                 {"error": "County is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         if not town:
             return Response(
                 {"error": "Town is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         if not address:
             return Response(
                 {"error": "Delivery address is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # -----------------------------------------
-        # Validate items
-        # -----------------------------------------
-
-        if not items:
-            return Response(
-                {"error": "Your cart is empty."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if payment_method not in {
-            "mpesa",
-            "card",
-            "cod",
-        }:
+        if payment_method not in {"mpesa", "card", "cod"}:
             return Response(
                 {"error": "Invalid payment method."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # -----------------------------------------
-        # Prepare order items
-        # -----------------------------------------
-
-        order_items = []
-
-        subtotal = Decimal("0.00")
-
-        for item in items:
-
-            product_id = item.get(
-                "product_id"
-            )
-
-            quantity = item.get(
-                "quantity"
-            )
-
-            if not product_id:
-                return Response(
-                    {
-                        "error":
-                        "Product ID is required."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            try:
-                quantity = int(quantity)
-
-            except (
-                TypeError,
-                ValueError,
-            ):
-                return Response(
-                    {
-                        "error":
-                        "Invalid quantity."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            if quantity <= 0:
-                return Response(
-                    {
-                        "error":
-                        "Quantity must be greater than zero."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # -------------------------------------
-            # Lock product
-            # -------------------------------------
-
-            try:
-
-                product = (
-                    Product.objects
-                    .select_for_update()
-                    .get(
-                        id=product_id,
-                        status="active",
-                    )
-                )
-
-            except Product.DoesNotExist:
-
-                return Response(
-                    {
-                        "error": (
-                            f"Product {product_id} "
-                            "does not exist or is unavailable."
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # -------------------------------------
-            # Check stock
-            # -------------------------------------
-
-            if product.stock_quantity < quantity:
-
-                return Response(
-                    {
-                        "error": (
-                            f"Only "
-                            f"{product.stock_quantity} "
-                            f"units of "
-                            f"{product.name} "
-                            "are available."
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # -------------------------------------
-            # Get database price
-            # -------------------------------------
-
-            unit_price = product.current_price
-
-            item_total = (
-                unit_price * quantity
-            )
-
-            subtotal += item_total
-
-            order_items.append(
-                {
-                    "product": product,
-                    "quantity": quantity,
-                    "unit_price": unit_price,
-                    "total_price": item_total,
-                }
-            )
-
-        # -----------------------------------------
-        # Calculate delivery
-        # -----------------------------------------
-
-        delivery_fee = get_delivery_fee(
-            county
-        )
-
-        total = (
-            subtotal +
-            delivery_fee
-        )
-
-        # -----------------------------------------
-        # Create order
-        # -----------------------------------------
-
-        order = Order.objects.create(
-
-            user=(
-                request.user
-                if request.user.is_authenticated
-                else None
-            ),
-
-            full_name=full_name,
-
-            email=email,
-
-            phone=normalized_phone,
-
-            county=county,
-
-            town=town,
-
-            delivery_address=address,
-
-            payment_method=payment_method,
-
-            payment_status="pending",
-
-            status="pending",
-
-            subtotal=subtotal,
-
-            delivery_fee=delivery_fee,
-
-            total=total,
-        )
-
-        # -----------------------------------------
-        # Create order items
-        # -----------------------------------------
-
-        for item in order_items:
-
-            product = item["product"]
-
-            OrderItem.objects.create(
-
-                order=order,
-
-                product=product,
-
-                product_name=product.name,
-
-                sku=product.sku,
-
-                quantity=item["quantity"],
-
-                unit_price=item["unit_price"],
-
-                total_price=item["total_price"],
-            )
-
-        # -----------------------------------------
-        # CASH ON DELIVERY
-        # -----------------------------------------
-
-        if payment_method == "cod":
-
-            order.payment_status = "pending"
-
-            order.save(
-                update_fields=[
-                    "payment_status",
-                    "updated_at",
-                ]
-            )
-
-            serializer = OrderSerializer(
-                order
-            )
-
-            return Response(
-                serializer.data,
-                status=status.HTTP_201_CREATED,
-            )
-
-        # -----------------------------------------
-        # CARD
-        # -----------------------------------------
-
+        # Card payments are not implemented; reject before creating an order.
         if payment_method == "card":
-
             return Response(
-                {
-                    "error": (
-                        "Card payments are "
-                        "not available yet."
-                    )
-                },
+                {"error": "Card payments are not available yet."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # -----------------------------------------
-        # M-PESA PAYMENT
-        # -----------------------------------------
-
-        # -----------------------------------------
-        # Create payment record
-        # -----------------------------------------
-
-        payment = Payment.objects.create(
-
-            order=order,
-
-            phone_number=normalized_phone,
-
-            amount=total,
-
-            payment_method="mpesa",
-
-        )
-
-        # -----------------------------------------
-        # Send STK Push
-        # -----------------------------------------
-
-        try:
-
-            mpesa_response = (
-                MpesaService.stk_push(
-
-                    phone_number=normalized_phone,
-
-                    amount=total,
-
-                    account_reference=(
-                        order.order_number
-                    ),
-
-                    transaction_description=(
-                        "Anova Technologies "
-                        "Order Payment"
-                    ),
+        # Merge duplicate product IDs so stock validation cannot be bypassed
+        # by submitting the same product in multiple cart rows.
+        quantities_by_product = {}
+        for item in items:
+            if not isinstance(item, dict):
+                return Response(
+                    {"error": "Invalid cart item."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            product_id = item.get("product_id")
+            if not product_id:
+                return Response(
+                    {"error": "Product ID is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            raw_quantity = item.get("quantity")
+            if isinstance(raw_quantity, bool):
+                return Response(
+                    {"error": "Invalid quantity."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                quantity = int(raw_quantity)
+            except (TypeError, ValueError, OverflowError):
+                return Response(
+                    {"error": "Invalid quantity."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if quantity <= 0 or str(raw_quantity).strip() != str(quantity):
+                return Response(
+                    {"error": "Quantity must be a positive whole number."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            key = str(product_id)
+            quantities_by_product[key] = (
+                quantities_by_product.get(key, 0) + quantity
             )
 
+        # Build and save the order under a short database transaction. The
+        # Safaricom network request happens after this transaction has committed.
+        order_items = []
+        subtotal = Decimal("0.00")
+
+        with transaction.atomic():
+            for product_id, quantity in quantities_by_product.items():
+                try:
+                    product = (
+                        Product.objects.select_for_update()
+                        .get(id=product_id, status="active")
+                    )
+                except (Product.DoesNotExist, ValueError, TypeError):
+                    return Response(
+                        {
+                            "error": (
+                                f"Product {product_id} does not exist "
+                                "or is unavailable."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if product.stock_quantity < quantity:
+                    return Response(
+                        {
+                            "error": (
+                                f"Only {product.stock_quantity} units of "
+                                f"{product.name} are available."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Use the pricing fields saved by the product creation form.
+                # A sale price applies only when it is lower than the regular
+                # price and its optional start/end dates make the sale active.
+                # Never trust a price submitted by the browser.
+                now = timezone.now()
+                sale_is_valid = (
+                    product.sale_price is not None
+                    and product.sale_price > Decimal("0.00")
+                    and product.sale_price < product.price
+                    and (
+                        product.sale_start_date is None
+                        or product.sale_start_date <= now
+                    )
+                    and (
+                        product.sale_end_date is None
+                        or product.sale_end_date >= now
+                    )
+                )
+
+                unit_price = Decimal(
+                    str(product.sale_price if sale_is_valid else product.price)
+                )
+                item_total = unit_price * quantity
+                subtotal += item_total
+                order_items.append(
+                    {
+                        "product": product,
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "total_price": item_total,
+                    }
+                )
+
+            delivery_fee = get_delivery_fee(county)
+            total = subtotal + delivery_fee
+
+            order = Order.objects.create(
+                user=(
+                    request.user
+                    if request.user.is_authenticated
+                    else None
+                ),
+                full_name=full_name,
+                email=email,
+                phone=normalized_phone,
+                county=county,
+                town=town,
+                delivery_address=address,
+                payment_method=payment_method,
+                payment_status="pending",
+                status="pending",
+                subtotal=subtotal,
+                delivery_fee=delivery_fee,
+                total=total,
+            )
+
+            for item in order_items:
+                product = item["product"]
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    product_name=product.name,
+                    sku=product.sku,
+                    quantity=item["quantity"],
+                    unit_price=item["unit_price"],
+                    total_price=item["total_price"],
+                )
+
+            if payment_method == "mpesa":
+                payment = Payment.objects.create(
+                    order=order,
+                    phone_number=normalized_phone,
+                    amount=total,
+                    payment_method="mpesa",
+                )
+
+        # Cash on delivery does not require an M-Pesa request.
+        if payment_method == "cod":
+            return Response(
+                OrderSerializer(order).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        # Initiate M-Pesa after the order/payment records have committed.
+        try:
+            mpesa_response = MpesaService.stk_push(
+                phone_number=normalized_phone,
+                amount=total,
+                account_reference=order.order_number,
+                transaction_description="Anova Order Payment",
+            )
         except Exception as error:
-
-            # -------------------------------------
-            # STK Push failed
-            # -------------------------------------
-
-            payment.result_description = (
-                str(error)
-            )
-
-            payment.save(
-                update_fields=[
-                    "result_description",
-                    "updated_at",
-                ]
-            )
-
+            payment.result_description = str(error)[:1000]
+            payment.save(update_fields=["result_description", "updated_at"])
             return Response(
                 {
-                    "error": (
-                        "Unable to initiate "
-                        "M-Pesa payment."
+                    "error": "Unable to initiate M-Pesa payment.",
+                    "details": (
+                        "Please retry or contact support if an order number "
+                        "has already been created."
                     ),
-
-                    "details": str(error),
+                    "order_number": order.order_number,
                 },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        # -----------------------------------------
-        # Save Daraja transaction IDs
-        # -----------------------------------------
-
-        payment.merchant_request_id = (
-            mpesa_response.get(
-                "MerchantRequestID"
-            )
-        )
-
-        payment.checkout_request_id = (
-            mpesa_response.get(
-                "CheckoutRequestID"
-            )
-        )
-
-        payment.result_code = (
-            mpesa_response.get(
-                "ResponseCode"
-            )
-        )
-
-        payment.result_description = (
-            mpesa_response.get(
-                "ResponseDescription"
-            )
-        )
-
-        payment.save()
-
-        # -----------------------------------------
-        # Return order + payment information
-        # -----------------------------------------
-
-        serializer = OrderSerializer(
-            order
+        payment.merchant_request_id = mpesa_response.get("MerchantRequestID")
+        payment.checkout_request_id = mpesa_response.get("CheckoutRequestID")
+        payment.result_code = mpesa_response.get("ResponseCode")
+        payment.result_description = mpesa_response.get("ResponseDescription")
+        payment.save(
+            update_fields=[
+                "merchant_request_id",
+                "checkout_request_id",
+                "result_code",
+                "result_description",
+                "updated_at",
+            ]
         )
 
         return Response(
             {
-                "order": serializer.data,
-
+                "order": OrderSerializer(order).data,
                 "payment": {
                     "status": "pending",
-
-                    "checkout_request_id":
-                        payment.checkout_request_id,
-
-                    "merchant_request_id":
-                        payment.merchant_request_id,
-
-                    "message": (
-                        "M-Pesa payment prompt "
-                        "sent to your phone."
-                    ),
+                    "checkout_request_id": payment.checkout_request_id,
+                    "merchant_request_id": payment.merchant_request_id,
+                    "message": "M-Pesa payment prompt sent to your phone.",
                 },
             },
             status=status.HTTP_201_CREATED,

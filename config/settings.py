@@ -77,7 +77,8 @@ INSTALLED_APPS = [
     'products',
 
     'rest_framework',
-    'corsheaders'
+    'corsheaders',
+    'newsletter',
 ]
 
 MIDDLEWARE = [

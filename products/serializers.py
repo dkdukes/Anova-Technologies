@@ -1,3 +1,4 @@
+
 from rest_framework import serializers
 
 from .models import (
@@ -89,9 +90,7 @@ class BrandSerializer(serializers.ModelSerializer):
 # PRODUCT IMAGE SERIALIZER
 # ============================================================
 
-class ProductImageSerializer(
-    serializers.ModelSerializer
-):
+class ProductImageSerializer(serializers.ModelSerializer):
 
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(),
@@ -120,9 +119,7 @@ class ProductImageSerializer(
 # PRODUCT SPECIFICATION SERIALIZER
 # ============================================================
 
-class ProductSpecificationSerializer(
-    serializers.ModelSerializer
-):
+class ProductSpecificationSerializer(serializers.ModelSerializer):
 
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(),
@@ -150,9 +147,7 @@ class ProductSpecificationSerializer(
 # SPECIFICATION TEMPLATE SERIALIZER
 # ============================================================
 
-class SpecificationTemplateSerializer(
-    serializers.ModelSerializer
-):
+class SpecificationTemplateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SpecificationTemplate
@@ -169,9 +164,7 @@ class SpecificationTemplateSerializer(
 # PRODUCT SERIALIZER
 # ============================================================
 
-class ProductSerializer(
-    serializers.ModelSerializer
-):
+class ProductSerializer(serializers.ModelSerializer):
 
     # --------------------------------------------------------
     # CATEGORY
@@ -242,22 +235,80 @@ class ProductSerializer(
     )
 
     # --------------------------------------------------------
-    # PRODUCT CALCULATED FIELDS
+    # CALCULATED FIELDS
     # --------------------------------------------------------
 
-    current_price = serializers.DecimalField(
-        max_digits=12,
+    is_on_sale = serializers.BooleanField(
+        read_only=True
+    )
+
+    discount_percentage = serializers.DecimalField(
+        max_digits=5,
         decimal_places=2,
         read_only=True
     )
 
-    is_on_sale = serializers.BooleanField(
+    is_in_stock = serializers.BooleanField(
         read_only=True
     )
 
     is_low_stock = serializers.BooleanField(
         read_only=True
     )
+
+    # --------------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------------
+
+    def validate(self, attrs):
+
+        price = attrs.get(
+            "price",
+            getattr(self.instance, "price", None)
+        )
+
+        sale_price = attrs.get(
+            "sale_price",
+            getattr(self.instance, "sale_price", None)
+        )
+
+        sale_start_date = attrs.get(
+            "sale_start_date",
+            getattr(self.instance, "sale_start_date", None)
+        )
+
+        sale_end_date = attrs.get(
+            "sale_end_date",
+            getattr(self.instance, "sale_end_date", None)
+        )
+
+        # Sale price must be lower than regular price
+        if (
+            sale_price is not None
+            and price is not None
+            and sale_price >= price
+        ):
+            raise serializers.ValidationError({
+                "sale_price": (
+                    "Sale price must be lower than "
+                    "the regular price."
+                )
+            })
+
+        # Sale end date must be after start date
+        if (
+            sale_start_date
+            and sale_end_date
+            and sale_end_date <= sale_start_date
+        ):
+            raise serializers.ValidationError({
+                "sale_end_date": (
+                    "Sale end date must be later "
+                    "than the sale start date."
+                )
+            })
+
+        return attrs
 
     # --------------------------------------------------------
     # META
@@ -270,9 +321,11 @@ class ProductSerializer(
 
             "id",
 
+            # Product information
             "name",
             "slug",
             "sku",
+            "variation",
 
             # Category
             "category",
@@ -282,6 +335,10 @@ class ProductSerializer(
             "brand",
             "brand_id",
 
+            # Product details
+            "color",
+            "condition",
+
             # Description
             "short_description",
             "description",
@@ -290,21 +347,29 @@ class ProductSerializer(
             # Pricing
             "price",
             "sale_price",
-            "current_price",
+            "sale_start_date",
+            "sale_end_date",
 
             # Stock
             "stock_quantity",
             "low_stock_threshold",
-
-            # Product condition
-            "condition",
-            "warranty",
 
             # Package information
             "weight",
             "package_length",
             "package_width",
             "package_height",
+
+            # Technical specifications
+            "model",
+            "cpu_cores",
+            "cpu_speed",
+            "display_size",
+            "drive_type",
+            "graphics_type",
+            "storage_capacity",
+            "system_memory",
+            "cpu_manufacturer",
 
             # Usage / Courses
             "usage",
@@ -314,16 +379,16 @@ class ProductSerializer(
             "images",
             "specifications",
 
+            # Warranty
+            "warranty",
+
             # Status
             "status",
-            "is_featured",
-
-            # SEO
-            "meta_title",
-            "meta_description",
 
             # Calculated
             "is_on_sale",
+            "discount_percentage",
+            "is_in_stock",
             "is_low_stock",
 
             # Dates
@@ -336,8 +401,9 @@ class ProductSerializer(
             "id",
             "slug",
 
-            "current_price",
             "is_on_sale",
+            "discount_percentage",
+            "is_in_stock",
             "is_low_stock",
 
             "created_at",
@@ -365,6 +431,7 @@ class LaptopRecommendationSerializer(ProductSerializer):
     )
 
     class Meta(ProductSerializer.Meta):
+
         fields = ProductSerializer.Meta.fields + [
             "recommendation_score",
             "recommendation_label",
@@ -376,9 +443,7 @@ class LaptopRecommendationSerializer(ProductSerializer):
 # ADMIN PRODUCT SERIALIZER
 # ============================================================
 
-class AdminProductSerializer(
-    serializers.ModelSerializer
-):
+class AdminProductSerializer(serializers.ModelSerializer):
 
     # --------------------------------------------------------
     # CATEGORY
@@ -454,13 +519,17 @@ class AdminProductSerializer(
     # CALCULATED FIELDS
     # --------------------------------------------------------
 
-    current_price = serializers.DecimalField(
-        max_digits=12,
+    is_on_sale = serializers.BooleanField(
+        read_only=True
+    )
+
+    discount_percentage = serializers.DecimalField(
+        max_digits=5,
         decimal_places=2,
         read_only=True
     )
 
-    is_on_sale = serializers.BooleanField(
+    is_in_stock = serializers.BooleanField(
         read_only=True
     )
 
@@ -483,6 +552,58 @@ class AdminProductSerializer(
     )
 
     # --------------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------------
+
+    def validate(self, attrs):
+
+        price = attrs.get(
+            "price",
+            getattr(self.instance, "price", None)
+        )
+
+        sale_price = attrs.get(
+            "sale_price",
+            getattr(self.instance, "sale_price", None)
+        )
+
+        sale_start_date = attrs.get(
+            "sale_start_date",
+            getattr(self.instance, "sale_start_date", None)
+        )
+
+        sale_end_date = attrs.get(
+            "sale_end_date",
+            getattr(self.instance, "sale_end_date", None)
+        )
+
+        if (
+            sale_price is not None
+            and price is not None
+            and sale_price >= price
+        ):
+            raise serializers.ValidationError({
+                "sale_price": (
+                    "Sale price must be lower than "
+                    "the regular price."
+                )
+            })
+
+        if (
+            sale_start_date
+            and sale_end_date
+            and sale_end_date <= sale_start_date
+        ):
+            raise serializers.ValidationError({
+                "sale_end_date": (
+                    "Sale end date must be later "
+                    "than the sale start date."
+                )
+            })
+
+        return attrs
+
+    # --------------------------------------------------------
     # META
     # --------------------------------------------------------
 
@@ -493,9 +614,11 @@ class AdminProductSerializer(
 
             "id",
 
+            # Product information
             "name",
             "slug",
             "sku",
+            "variation",
 
             # Category
             "category",
@@ -507,6 +630,10 @@ class AdminProductSerializer(
             "brand_id",
             "brand_name",
 
+            # Product details
+            "color",
+            "condition",
+
             # Description
             "short_description",
             "description",
@@ -515,21 +642,29 @@ class AdminProductSerializer(
             # Pricing
             "price",
             "sale_price",
-            "current_price",
+            "sale_start_date",
+            "sale_end_date",
 
             # Stock
             "stock_quantity",
             "low_stock_threshold",
-
-            # Product condition
-            "condition",
-            "warranty",
 
             # Package information
             "weight",
             "package_length",
             "package_width",
             "package_height",
+
+            # Technical specifications
+            "model",
+            "cpu_cores",
+            "cpu_speed",
+            "display_size",
+            "drive_type",
+            "graphics_type",
+            "storage_capacity",
+            "system_memory",
+            "cpu_manufacturer",
 
             # Usage / Courses
             "usage",
@@ -539,16 +674,16 @@ class AdminProductSerializer(
             "images",
             "specifications",
 
+            # Warranty
+            "warranty",
+
             # Status
             "status",
-            "is_featured",
-
-            # SEO
-            "meta_title",
-            "meta_description",
 
             # Calculated
             "is_on_sale",
+            "discount_percentage",
+            "is_in_stock",
             "is_low_stock",
 
             # Dates
@@ -557,11 +692,13 @@ class AdminProductSerializer(
         ]
 
         read_only_fields = [
+
             "id",
             "slug",
 
-            "current_price",
             "is_on_sale",
+            "discount_percentage",
+            "is_in_stock",
             "is_low_stock",
 
             "created_at",
@@ -573,27 +710,16 @@ class AdminProductSerializer(
 # ADMIN BRAND SERIALIZER
 # ============================================================
 
-class AdminBrandSerializer(
-    serializers.ModelSerializer
-):
-
+class AdminBrandSerializer(serializers.ModelSerializer):
     product_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Brand
-
         fields = (
             "id",
             "name",
             "slug",
             "logo",
-            "is_active",
-            "product_count",
-        )
-
-        read_only_fields = (
-            "id",
-            "slug",
             "product_count",
         )
 
@@ -605,23 +731,19 @@ class AdminBrandSerializer(
 # ADMIN BRAND PRODUCT SERIALIZER
 # ============================================================
 
-class AdminBrandProductSerializer(
-    serializers.ModelSerializer
-):
+class AdminBrandProductSerializer(serializers.ModelSerializer):
 
-    current_price = serializers.DecimalField(
-        max_digits=12,
+    is_on_sale = serializers.BooleanField(read_only=True)
+
+    discount_percentage = serializers.DecimalField(
+        max_digits=5,
         decimal_places=2,
         read_only=True
     )
 
-    is_on_sale = serializers.BooleanField(
-        read_only=True
-    )
+    is_in_stock = serializers.BooleanField(read_only=True)
 
-    is_low_stock = serializers.BooleanField(
-        read_only=True
-    )
+    is_low_stock = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Product
@@ -631,25 +753,36 @@ class AdminBrandProductSerializer(
             "name",
             "slug",
             "sku",
+
             "price",
             "sale_price",
-            "current_price",
+
             "stock_quantity",
             "low_stock_threshold",
+
             "status",
-            "is_featured",
+
             "is_on_sale",
+            "discount_percentage",
+            "is_in_stock",
             "is_low_stock",
         )
 
+        read_only_fields = (
+            "id",
+            "slug",
+
+            "is_on_sale",
+            "discount_percentage",
+            "is_in_stock",
+            "is_low_stock",
+        )
 
 # ============================================================
 # ADMIN BRAND DETAIL SERIALIZER
 # ============================================================
 
-class AdminBrandDetailSerializer(
-    serializers.ModelSerializer
-):
+class AdminBrandDetailSerializer(serializers.ModelSerializer):
 
     product_count = serializers.SerializerMethodField()
 
@@ -686,9 +819,7 @@ class AdminBrandDetailSerializer(
 # ADMIN CATEGORY SERIALIZER
 # ============================================================
 
-class AdminCategorySerializer(
-    serializers.ModelSerializer
-):
+class AdminCategorySerializer(serializers.ModelSerializer):
 
     product_count = serializers.SerializerMethodField()
 
@@ -721,9 +852,7 @@ class AdminCategorySerializer(
 # STORE SETTINGS SERIALIZER
 # ============================================================
 
-class StoreSettingsSerializer(
-    serializers.ModelSerializer
-):
+class StoreSettingsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StoreSettings
@@ -745,3 +874,4 @@ class StoreSettingsSerializer(
             "id",
             "updated_at",
         ]
+

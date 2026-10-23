@@ -23,4 +23,6 @@ urlpatterns = [
     path("api/orders/",include("orders.urls")),
     path( "api/payments/",include("payments.urls")),
     path("api/customers/", include("accounts.urls")),
+    # Keep your existing URL patterns here.
+    path("api/newsletter/", include("newsletter.urls")),
 ]

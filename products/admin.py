@@ -86,7 +86,6 @@ class ProductAdmin(admin.ModelAdmin):
         "stock_quantity",
         "condition",
         "status",
-        "is_featured",
     )
 
     list_filter = (
@@ -94,7 +93,6 @@ class ProductAdmin(admin.ModelAdmin):
         "brand",
         "condition",
         "status",
-        "is_featured",
     )
 
     search_fields = (
@@ -180,14 +178,7 @@ class ProductAdmin(admin.ModelAdmin):
             },
         ),
 
-        (
-            "Store Settings",
-            {
-                "fields": (
-                    "is_featured",
-                ),
-            },
-        ),
+       
 
         (
             "System Information",
