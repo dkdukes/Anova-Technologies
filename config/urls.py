@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path,include
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -25,4 +26,10 @@ urlpatterns = [
     path("api/customers/", include("accounts.urls")),
     # Keep your existing URL patterns here.
     path("api/newsletter/", include("newsletter.urls")),
+    path("api/", include("reviews.urls")),
+    path(
+        "api/token/refresh/",
+        TokenRefreshView.as_view(),
+        name="token_refresh",
+    ),
 ]
