@@ -1,5 +1,6 @@
 
 from rest_framework import serializers
+from django.db.models import Avg
 
 from .models import (
     Brand,
@@ -238,6 +239,9 @@ class ProductSerializer(serializers.ModelSerializer):
     # CALCULATED FIELDS
     # --------------------------------------------------------
 
+    average_rating = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
+
     is_on_sale = serializers.BooleanField(
         read_only=True
     )
@@ -255,6 +259,29 @@ class ProductSerializer(serializers.ModelSerializer):
     is_low_stock = serializers.BooleanField(
         read_only=True
     )
+
+
+    # --------------------------------------------------------
+    # PRODUCT REVIEWS
+    # --------------------------------------------------------
+
+    def get_average_rating(self, product):
+        result = product.reviews.filter(
+            is_approved=True
+        ).aggregate(
+            average=Avg("rating")
+        )
+
+        average = result["average"]
+
+        return round(average, 1) if average is not None else 0
+
+
+    def get_review_count(self, product):
+        return product.reviews.filter(
+            is_approved=True
+        ).count()
+
 
     # --------------------------------------------------------
     # VALIDATION
@@ -390,6 +417,20 @@ class ProductSerializer(serializers.ModelSerializer):
             "discount_percentage",
             "is_in_stock",
             "is_low_stock",
+
+            # Dates
+            "created_at",
+            "updated_at",
+
+            # Calculated
+            "is_on_sale",
+            "discount_percentage",
+            "is_in_stock",
+            "is_low_stock",
+
+            # Product reviews
+            "average_rating",
+            "review_count",
 
             # Dates
             "created_at",
