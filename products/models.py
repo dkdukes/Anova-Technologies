@@ -1,10 +1,38 @@
 from django.db import models
 from django.utils.text import slugify
-
+from django.conf import settings
 
 # ============================================================
 # CATEGORY
 # ============================================================
+
+class Wishlist(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="wishlist_items"
+    )
+
+    product = models.ForeignKey(
+        "products.Product",
+        on_delete=models.CASCADE,
+        related_name="wishlisted_by"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "product"],
+                name="unique_user_wishlist_product"
+            )
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user} - {self.product}"
+
 
 class Category(models.Model):
 
@@ -23,7 +51,15 @@ class Category(models.Model):
         blank=True
     )
 
-    image = models.URLField(
+        # Existing Cloudinary URL — preserve during migration
+    image_url = models.URLField(
+        blank=True,
+        null=True
+    )
+
+    # New local image
+    image = models.ImageField(
+        upload_to="categories/",
         blank=True,
         null=True
     )
@@ -112,7 +148,15 @@ class Brand(models.Model):
         blank=True
     )
 
-    logo = models.URLField(
+        # Existing Cloudinary URL — preserve during migration
+    logo_url = models.URLField(
+        blank=True,
+        null=True
+    )
+
+    # New local logo
+    logo = models.ImageField(
+        upload_to="brands/",
         blank=True,
         null=True
     )
@@ -609,7 +653,18 @@ class ProductImage(models.Model):
         related_name="images"
     )
 
-    image_url = models.URLField()
+        # Existing Cloudinary URL — preserve during migration
+    image_url = models.URLField(
+        blank=True,
+        null=True
+    )
+
+    # New local image
+    image = models.ImageField(
+        upload_to="products/",
+        blank=True,
+        null=True
+    )
 
     alt_text = models.CharField(
         max_length=255,
@@ -633,7 +688,6 @@ class ProductImage(models.Model):
 
     def __str__(self):
         return f"{self.product.name} - Image {self.id}"
-
 
 # ============================================================
 # PRODUCT SPECIFICATION
@@ -698,7 +752,15 @@ class StoreSettings(models.Model):
         blank=True
     )
 
-    logo = models.URLField(
+        # Existing Cloudinary URL — preserve during migration
+    logo_url = models.URLField(
+        blank=True,
+        null=True
+    )
+
+    # New local logo
+    logo = models.ImageField(
+        upload_to="store/",
         blank=True,
         null=True
     )

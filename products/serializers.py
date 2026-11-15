@@ -1,6 +1,7 @@
 
 from rest_framework import serializers
 from django.db.models import Avg
+from .models import Wishlist
 
 from .models import (
     Brand,
@@ -13,6 +14,18 @@ from .models import (
     Course,
     Usage,
 )
+
+
+def get_image_url(request, image_field, fallback_url=None):
+    if image_field:
+        url = image_field.url
+
+        if request is not None:
+            return request.build_absolute_uri(url)
+
+        return url
+
+    return fallback_url or None
 
 
 # ============================================================
@@ -56,6 +69,8 @@ class CourseSerializer(serializers.ModelSerializer):
 
 class CategorySerializer(serializers.ModelSerializer):
 
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = Category
 
@@ -68,12 +83,21 @@ class CategorySerializer(serializers.ModelSerializer):
             "is_active",
         ]
 
+    def get_image(self, obj):
+        return get_image_url(
+            self.context.get("request"),
+            obj.image,
+            obj.image_url,
+        )
+
 
 # ============================================================
 # BRAND SERIALIZER
 # ============================================================
 
 class BrandSerializer(serializers.ModelSerializer):
+
+    logo = serializers.SerializerMethodField()
 
     class Meta:
         model = Brand
@@ -86,6 +110,12 @@ class BrandSerializer(serializers.ModelSerializer):
             "is_active",
         ]
 
+    def get_logo(self, obj):
+        return get_image_url(
+            self.context.get("request"),
+            obj.logo,
+            obj.logo_url,
+        )
 
 # ============================================================
 # PRODUCT IMAGE SERIALIZER
@@ -99,12 +129,21 @@ class ProductImageSerializer(serializers.ModelSerializer):
         write_only=True,
     )
 
+    image = serializers.ImageField(
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+
+    image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductImage
 
         fields = [
             "id",
             "product_id",
+            "image",
             "image_url",
             "alt_text",
             "is_primary",
@@ -113,8 +152,15 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
         read_only_fields = [
             "id",
+            "image_url",
         ]
 
+    def get_image_url(self, obj):
+        return get_image_url(
+            self.context.get("request"),
+            obj.image,
+            obj.image_url,
+        )
 
 # ============================================================
 # PRODUCT SPECIFICATION SERIALIZER
@@ -452,6 +498,17 @@ class ProductSerializer(serializers.ModelSerializer):
         ]
 
 
+class WishlistSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+
+    class Meta:
+        model = Wishlist
+        fields = (
+            "id",
+            "product",
+            "created_at",
+        )
+
 # ============================================================
 # LAPTOP RECOMMENDATION SERIALIZER
 # ============================================================
@@ -752,6 +809,7 @@ class AdminProductSerializer(serializers.ModelSerializer):
 # ============================================================
 
 class AdminBrandSerializer(serializers.ModelSerializer):
+    logo = serializers.SerializerMethodField()
     product_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -762,6 +820,13 @@ class AdminBrandSerializer(serializers.ModelSerializer):
             "slug",
             "logo",
             "product_count",
+        )
+
+    def get_logo(self, obj):
+        return get_image_url(
+            self.context.get("request"),
+            obj.logo,
+            obj.logo_url,
         )
 
     def get_product_count(self, obj):
@@ -825,6 +890,7 @@ class AdminBrandProductSerializer(serializers.ModelSerializer):
 
 class AdminBrandDetailSerializer(serializers.ModelSerializer):
 
+    logo = serializers.SerializerMethodField()
     product_count = serializers.SerializerMethodField()
 
     products = AdminBrandProductSerializer(
@@ -852,6 +918,13 @@ class AdminBrandDetailSerializer(serializers.ModelSerializer):
             "products",
         )
 
+    def get_logo(self, obj):
+        return get_image_url(
+            self.context.get("request"),
+            obj.logo,
+            obj.logo_url,
+        )
+
     def get_product_count(self, obj):
         return obj.products.count()
 
@@ -862,6 +935,7 @@ class AdminBrandDetailSerializer(serializers.ModelSerializer):
 
 class AdminCategorySerializer(serializers.ModelSerializer):
 
+    image = serializers.SerializerMethodField()
     product_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -885,6 +959,13 @@ class AdminCategorySerializer(serializers.ModelSerializer):
             "created_at",
         )
 
+    def get_image(self, obj):
+        return get_image_url(
+            self.context.get("request"),
+            obj.image,
+            obj.image_url,
+        )
+
     def get_product_count(self, obj):
         return obj.products.count()
 
@@ -894,6 +975,8 @@ class AdminCategorySerializer(serializers.ModelSerializer):
 # ============================================================
 
 class StoreSettingsSerializer(serializers.ModelSerializer):
+
+    logo = serializers.SerializerMethodField()
 
     class Meta:
         model = StoreSettings
@@ -916,3 +999,9 @@ class StoreSettingsSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def get_logo(self, obj):
+        return get_image_url(
+            self.context.get("request"),
+            obj.logo,
+            obj.logo_url,
+        )
