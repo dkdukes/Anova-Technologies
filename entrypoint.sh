@@ -12,7 +12,7 @@ echo "Configuring Nginx..."
 nginx -t
 
 echo "Starting Nginx..."
-nginx
+nginx -g "daemon off;" &
 
 echo "Starting Gunicorn..."
 exec gunicorn config.wsgi:application \

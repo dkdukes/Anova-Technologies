@@ -7,7 +7,6 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install system dependencies
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     nginx \
@@ -21,12 +20,15 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy Django project
 COPY . .
 
+# Configure Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Prepare directories
 RUN mkdir -p /app/staticfiles /app/media
 
 # Add startup script
 RUN chmod +x /app/entrypoint.sh
 
-EXPOSE 8000
+EXPOSE 80
 
 CMD ["/app/entrypoint.sh"]
