@@ -7,8 +7,10 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install system dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
