@@ -23,6 +23,9 @@ COPY . .
 # Configure Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Disable the default Nginx site
+RUN rm -f /etc/nginx/sites-enabled/default
+
 # Prepare directories
 RUN mkdir -p /app/staticfiles /app/media
 
