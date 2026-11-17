@@ -81,8 +81,13 @@ DEBUG = os.getenv("DEBUG", "False").lower() in (
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
+
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 
 ALLOWED_HOSTS = [
     host.strip()
